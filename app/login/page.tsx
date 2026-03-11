@@ -42,9 +42,11 @@ function LoginForm() {
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-sm mx-auto px-6">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">
-            gutter
-          </h1>
+          <img
+            src="/logo.png"
+            alt="Gutter"
+            className="h-12 w-auto mx-auto mb-4"
+          />
           <p className="text-sm text-muted-foreground mt-1">
             enter password to continue
           </p>

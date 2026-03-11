@@ -1,4 +1,6 @@
-# Gutter
+<p align="center">
+  <img src="public/logo.png" alt="Gutter" width="320" />
+</p>
 
 **AI-native bullet journal** — Sequential logging, migration, collections, meeting prep. Local-first, privacy-first.
 
