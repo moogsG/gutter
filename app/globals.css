@@ -1,0 +1,495 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* ========== shadcn/ui CSS Variables ========== */
+@layer base {
+  :root {
+    /* Fallback defaults — cyberpink. Overridden by [data-theme] */
+    --background: 225 30% 6%;
+    --foreground: 210 40% 92%;
+    --card: 225 28% 9%;
+    --card-foreground: 210 40% 92%;
+    --popover: 225 28% 9%;
+    --popover-foreground: 210 40% 92%;
+    --primary: 330 100% 64%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 280 60% 45%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 225 20% 14%;
+    --muted-foreground: 215 16% 55%;
+    --accent: 280 80% 60%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 330 40% 20%;
+    --input: 225 25% 13%;
+    --ring: 330 100% 64%;
+    --chart-1: 330 100% 64%;
+    --chart-2: 190 100% 50%;
+    --chart-3: 155 100% 45%;
+    --chart-4: 280 80% 60%;
+    --chart-5: 45 100% 60%;
+    --radius: 0.5rem;
+    --sidebar-background: 225 28% 9%;
+    --sidebar-foreground: 210 40% 92%;
+    --sidebar-primary: 330 100% 64%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 225 20% 14%;
+    --sidebar-accent-foreground: 210 40% 92%;
+    --sidebar-border: 330 40% 20%;
+    --sidebar-ring: 330 100% 64%;
+  }
+
+  /* ========== Journal Theme: Cyberpink ========== */
+  /* Neon pink/purple on deep navy. Hot, electric, unapologetic. */
+  [data-theme="cyberpink"] {
+    --background: 225 30% 6%;
+    --foreground: 210 40% 92%;
+    --card: 225 28% 9%;
+    --card-foreground: 210 40% 92%;
+    --popover: 225 28% 9%;
+    --popover-foreground: 210 40% 92%;
+    --primary: 330 100% 64%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 280 60% 45%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 225 20% 14%;
+    --muted-foreground: 215 16% 55%;
+    --accent: 280 80% 60%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 330 40% 20%;
+    --input: 225 25% 13%;
+    --ring: 330 100% 64%;
+    --chart-1: 330 100% 64%;
+    --chart-2: 190 100% 50%;
+    --chart-3: 155 100% 45%;
+    --chart-4: 280 80% 60%;
+    --chart-5: 45 100% 60%;
+    /* Calendar colors — per-calendar, theme-aware */
+    --cal-gradient: 330 100% 64%;
+    --cal-family: 280 80% 60%;
+    --cal-home: 190 100% 50%;
+    --cal-jw: 45 100% 60%;
+    --cal-school: 155 100% 45%;
+    --cal-birthdays: 350 80% 65%;
+    --cal-holidays: 210 60% 55%;
+  }
+
+  /* ========== Journal Theme: Tokyo Night ========== */
+  /* Cool blues and teals on deep indigo. Calm, focused, midnight coding. */
+  [data-theme="tokyo-night"] {
+    --background: 235 21% 11%;
+    --foreground: 220 20% 80%;
+    --card: 233 20% 14%;
+    --card-foreground: 220 20% 80%;
+    --popover: 233 20% 14%;
+    --popover-foreground: 220 20% 80%;
+    --primary: 218 67% 65%;
+    --primary-foreground: 235 21% 11%;
+    --secondary: 172 60% 42%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 233 15% 18%;
+    --muted-foreground: 225 12% 50%;
+    --accent: 172 65% 50%;
+    --accent-foreground: 233 21% 11%;
+    --destructive: 348 86% 61%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 233 17% 22%;
+    --input: 233 18% 16%;
+    --ring: 218 67% 65%;
+    --chart-1: 218 67% 65%;
+    --chart-2: 172 65% 50%;
+    --chart-3: 40 95% 65%;
+    --chart-4: 265 85% 72%;
+    --chart-5: 348 85% 60%;
+    --cal-gradient: 218 67% 65%;
+    --cal-family: 265 85% 72%;
+    --cal-home: 172 65% 50%;
+    --cal-jw: 40 95% 65%;
+    --cal-school: 150 60% 50%;
+    --cal-birthdays: 348 85% 60%;
+    --cal-holidays: 200 50% 55%;
+  }
+
+  /* ========== Journal Theme: Rosé Pine ========== */
+  /* Warm rose and gold on deep plum. Soft, literary, evening light. */
+  [data-theme="rosepine"] {
+    --background: 249 22% 12%;
+    --foreground: 245 50% 91%;
+    --card: 247 23% 15%;
+    --card-foreground: 245 50% 91%;
+    --popover: 247 23% 15%;
+    --popover-foreground: 245 50% 91%;
+    --primary: 2 55% 83%;
+    --primary-foreground: 249 22% 12%;
+    --secondary: 35 88% 72%;
+    --secondary-foreground: 249 22% 12%;
+    --muted: 249 15% 20%;
+    --muted-foreground: 249 12% 47%;
+    --accent: 267 57% 78%;
+    --accent-foreground: 249 22% 12%;
+    --destructive: 343 76% 68%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 247 15% 24%;
+    --input: 247 20% 17%;
+    --ring: 2 55% 83%;
+    --chart-1: 2 55% 83%;
+    --chart-2: 35 88% 72%;
+    --chart-3: 267 57% 78%;
+    --chart-4: 190 50% 55%;
+    --chart-5: 343 76% 68%;
+    --cal-gradient: 2 55% 83%;
+    --cal-family: 267 57% 78%;
+    --cal-home: 190 50% 55%;
+    --cal-jw: 35 88% 72%;
+    --cal-school: 160 50% 60%;
+    --cal-birthdays: 343 76% 68%;
+    --cal-holidays: 220 40% 60%;
+  }
+
+  /* ========== Journal Theme: Catppuccin Mocha ========== */
+  /* Pastel lavender and mauve on warm dark. Cozy, soft, easy on the eyes. */
+  [data-theme="catppuccin"] {
+    --background: 240 21% 12%;
+    --foreground: 226 64% 88%;
+    --card: 240 21% 15%;
+    --card-foreground: 226 64% 88%;
+    --popover: 240 21% 15%;
+    --popover-foreground: 226 64% 88%;
+    --primary: 267 84% 81%;
+    --primary-foreground: 240 21% 12%;
+    --secondary: 316 72% 75%;
+    --secondary-foreground: 240 21% 12%;
+    --muted: 237 16% 20%;
+    --muted-foreground: 228 24% 55%;
+    --accent: 189 71% 73%;
+    --accent-foreground: 240 21% 12%;
+    --destructive: 351 74% 73%;
+    --destructive-foreground: 240 21% 12%;
+    --border: 240 16% 23%;
+    --input: 240 19% 17%;
+    --ring: 267 84% 81%;
+    --chart-1: 267 84% 81%;
+    --chart-2: 189 71% 73%;
+    --chart-3: 95 70% 77%;
+    --chart-4: 316 72% 75%;
+    --chart-5: 41 86% 83%;
+    --cal-gradient: 189 71% 73%;
+    --cal-family: 316 72% 75%;
+    --cal-home: 267 84% 81%;
+    --cal-jw: 41 86% 83%;
+    --cal-school: 95 70% 77%;
+    --cal-birthdays: 351 74% 73%;
+    --cal-holidays: 220 50% 65%;
+  }
+
+  /* ========== Journal Theme: Dracula ========== */
+  /* Purple and cyan on charcoal. Bold, high contrast, iconic. */
+  [data-theme="dracula"] {
+    --background: 231 15% 18%;
+    --foreground: 60 30% 96%;
+    --card: 232 14% 21%;
+    --card-foreground: 60 30% 96%;
+    --popover: 232 14% 21%;
+    --popover-foreground: 60 30% 96%;
+    --primary: 265 89% 78%;
+    --primary-foreground: 231 15% 18%;
+    --secondary: 135 94% 65%;
+    --secondary-foreground: 231 15% 18%;
+    --muted: 232 14% 25%;
+    --muted-foreground: 225 14% 55%;
+    --accent: 191 97% 77%;
+    --accent-foreground: 231 15% 18%;
+    --destructive: 0 100% 67%;
+    --destructive-foreground: 231 15% 18%;
+    --border: 232 14% 28%;
+    --input: 232 14% 23%;
+    --ring: 265 89% 78%;
+    --chart-1: 265 89% 78%;
+    --chart-2: 191 97% 77%;
+    --chart-3: 135 94% 65%;
+    --chart-4: 31 100% 71%;
+    --chart-5: 326 100% 74%;
+    --cal-gradient: 191 97% 77%;
+    --cal-family: 326 100% 74%;
+    --cal-home: 265 89% 78%;
+    --cal-jw: 31 100% 71%;
+    --cal-school: 135 94% 65%;
+    --cal-birthdays: 0 100% 67%;
+    --cal-holidays: 210 60% 60%;
+  }
+}
+
+@theme {
+  --color-slate-900: #0f1419;
+  --color-slate-800: #1a1f2e;
+  --color-slate-700: #2d3748;
+  --color-neon-pink: #ff6ec7;
+  --color-neon-pink-bright: #ff1493;
+  --color-neon-blue: #00d9ff;
+  --color-neon-purple: #7b68ee;
+  --color-neon-green: #00ff88;
+  --color-neon-red: #ff3366;
+  --color-neon-yellow: #ffd700;
+  --color-neon-cyan: #00d9ff;
+  --color-text-primary: #e2e8f0;
+  --color-text-muted: #94a3b8;
+  --shadow-neon-pink: 0 0 20px rgba(255, 110, 199, 0.5);
+  --shadow-neon-blue: 0 0 20px rgba(0, 217, 255, 0.5);
+  --shadow-neon-green: 0 0 20px rgba(0, 255, 136, 0.5);
+  --shadow-neon-glow: 0 0 30px rgba(255, 110, 199, 0.3), 0 0 60px rgba(0, 217, 255, 0.2);
+  --shadow-pink-glow-lg: 0 0 40px rgba(255, 110, 199, 0.8), 0 0 60px rgba(255, 110, 199, 0.4);
+
+  /* shadcn/ui theme integration */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+  --color-cal-gradient: hsl(var(--cal-gradient));
+  --color-cal-family: hsl(var(--cal-family));
+  --color-cal-home: hsl(var(--cal-home));
+  --color-cal-jw: hsl(var(--cal-jw));
+  --color-cal-school: hsl(var(--cal-school));
+  --color-cal-birthdays: hsl(var(--cal-birthdays));
+  --color-cal-holidays: hsl(var(--cal-holidays));
+  --color-sidebar-background: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ========== JYNX MODE (Default Goth Aesthetic) ========== */
+body.theme-jynx {
+  --color-primary: #ff6ec7;
+  --color-accent: #a855f7;
+  --color-success: #00ff88;
+  --glow-primary: rgba(255, 110, 199, 0.4);
+  --glow-accent: rgba(168, 85, 247, 0.4);
+  --border-radius: 0.5rem;
+  --shadow-style: 0 0 20px var(--glow-primary);
+}
+
+/* ========== WORK MODE (Professional Blue/Teal Aesthetic) ========== */
+body.theme-work {
+  --color-primary: #0ea5e9;
+  --color-accent: #14b8a6;
+  --color-success: #10b981;
+  --glow-primary: rgba(14, 165, 233, 0.3);
+  --glow-accent: rgba(20, 184, 166, 0.3);
+  --border-radius: 0.75rem;
+  --shadow-style: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Work mode: override glass cards with cleaner styling */
+body.theme-work .glass-card {
+  background: rgba(30, 41, 59, 0.8);
+  border: 2px solid rgba(14, 165, 233, 0.4);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-style);
+}
+
+/* Work mode: buttons are solid, not gradient */
+body.theme-work .btn-neon {
+  background: var(--color-primary);
+  box-shadow: var(--shadow-style);
+}
+
+body.theme-work .btn-neon:hover {
+  background: #0284c7;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Work mode: override neon borders with clean borders */
+body.theme-work .neon-border-pink {
+  border: 2px solid var(--color-primary);
+  box-shadow: var(--shadow-style);
+}
+
+body.theme-work .neon-border-blue {
+  border: 2px solid var(--color-accent);
+  box-shadow: var(--shadow-style);
+}
+
+body.theme-work .neon-border-green {
+  border: 2px solid var(--color-success);
+  box-shadow: var(--shadow-style);
+}
+
+/* Work mode: override text glow with clean text */
+body.theme-work .neon-text-pink {
+  color: var(--color-primary);
+  text-shadow: none;
+}
+
+body.theme-work .neon-text-blue {
+  color: var(--color-accent);
+  text-shadow: none;
+}
+
+body.theme-work .neon-text-green {
+  color: var(--color-success);
+  text-shadow: none;
+}
+
+body.theme-work .neon-text-purple {
+  color: var(--color-accent);
+  text-shadow: none;
+}
+
+/* Work mode: hide CornerGems */
+body.theme-work .corner-gem {
+  display: none;
+}
+
+/* Glass card style */
+.glass-card {
+  background: rgba(26, 31, 46, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 110, 199, 0.3);
+  border-radius: 12px;
+}
+
+/* Neon text */
+.neon-text-pink {
+  color: #ff6ec7;
+  text-shadow: 0 0 10px rgba(255, 110, 199, 0.8);
+}
+
+.neon-text-blue {
+  color: #00d9ff;
+  text-shadow: 0 0 10px rgba(0, 217, 255, 0.8);
+}
+
+.neon-text-green {
+  color: #00ff88;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.8);
+}
+
+.neon-text-purple {
+  color: #7b68ee;
+  text-shadow: 0 0 10px rgba(123, 104, 238, 0.8);
+}
+
+.neon-text-yellow {
+  color: #ffd700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+}
+
+.neon-text-cyan {
+  color: #00d9ff;
+  text-shadow: 0 0 10px rgba(0, 217, 255, 0.8);
+}
+
+/* Neon borders */
+.neon-border-pink {
+  border: 2px solid #ff6ec7;
+  box-shadow: 0 0 20px rgba(255, 110, 199, 0.5);
+}
+
+.neon-border-blue {
+  border: 2px solid #00d9ff;
+  box-shadow: 0 0 20px rgba(0, 217, 255, 0.5);
+}
+
+.neon-border-green {
+  border: 2px solid #00ff88;
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+}
+
+.neon-border-purple {
+  border: 2px solid #7b68ee;
+  box-shadow: 0 0 20px rgba(123, 104, 238, 0.5);
+}
+
+.neon-border-yellow {
+  border: 2px solid #ffd700;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+}
+
+.neon-border-cyan {
+  border: 2px solid #00d9ff;
+  box-shadow: 0 0 20px rgba(0, 217, 255, 0.5);
+}
+
+/* Glow button */
+.btn-neon {
+  background: linear-gradient(135deg, #ff6ec7 0%, #ff1493 100%);
+  box-shadow: 0 0 20px rgba(255, 110, 199, 0.6);
+  transition: all 0.3s ease;
+}
+
+.btn-neon:hover {
+  box-shadow: 0 0 40px rgba(255, 110, 199, 0.9);
+  transform: translateY(-2px);
+}
+
+@keyframes confetti-burst {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.8; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { 
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 200ms ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 300ms ease-out;
+}
+
+/* ========== Themed Prose — @tailwindcss/typography + CSS variable overrides ========== */
+/* Apply as: className="prose-themed" — all typography plugin config in one place */
+/* Theme-adapts via CSS variables: change --primary, --foreground, etc. and prose follows */

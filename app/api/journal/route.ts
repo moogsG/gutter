@@ -1,0 +1,91 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getJournalDb } from "@/lib/journal-db";
+import type { JournalEntry, NewEntry } from "@/types/journal";
+
+export async function GET(req: NextRequest) {
+  const date = req.nextUrl.searchParams.get("date");
+  
+  if (!date) {
+    return NextResponse.json({ error: "Date required" }, { status: 400 });
+  }
+
+  try {
+    const db = getJournalDb();
+    const entries = db
+      .prepare(
+        `SELECT id, date, signifier, text, status, migrated_to, migrated_from, 
+                collection_id, parent_id, tags, sort_order, created_at, updated_at 
+         FROM journal_entries 
+         WHERE date = ? 
+         ORDER BY sort_order ASC`
+      )
+      .all(date) as JournalEntry[];
+
+    // Parse tags JSON
+    const parsed = entries.map((e) => ({
+      ...e,
+      tags: e.tags ? JSON.parse(e.tags as unknown as string) : [],
+      children: [] as JournalEntry[],
+    }));
+
+    // Nest children under parents
+    const entryMap = new Map(parsed.map((e) => [e.id, e]));
+    const topLevel: JournalEntry[] = [];
+
+    for (const entry of parsed) {
+      if (entry.parent_id && entryMap.has(entry.parent_id)) {
+        entryMap.get(entry.parent_id)!.children!.push(entry);
+      } else {
+        topLevel.push(entry);
+      }
+    }
+
+    return NextResponse.json(topLevel);
+  } catch (error) {
+    console.error("Error fetching journal entries:", error);
+    return NextResponse.json({ error: "Failed to fetch entries" }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body: NewEntry = await req.json();
+    const { date, signifier, text, tags = [], parent_id } = body;
+
+    if (!date || !signifier || !text) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    const db = getJournalDb();
+    
+    // Get max sort_order — scoped to siblings (same parent or top-level)
+    const maxOrder = parent_id
+      ? db.prepare("SELECT MAX(sort_order) as max FROM journal_entries WHERE date = ? AND parent_id = ?").get(date, parent_id) as { max: number | null }
+      : db.prepare("SELECT MAX(sort_order) as max FROM journal_entries WHERE date = ? AND parent_id IS NULL").get(date) as { max: number | null };
+    
+    const sortOrder = (maxOrder?.max ?? -1) + 1;
+    const id = `je-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const now = new Date().toISOString();
+
+    db.prepare(
+      `INSERT INTO journal_entries 
+       (id, date, signifier, text, status, tags, sort_order, parent_id, created_at, updated_at) 
+       VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`
+    ).run(id, date, signifier, text, JSON.stringify(tags), sortOrder, parent_id || null, now, now);
+
+    const entry = db
+      .prepare("SELECT * FROM journal_entries WHERE id = ?")
+      .get(id) as JournalEntry;
+
+    return NextResponse.json({
+      ...entry,
+      tags: JSON.parse(entry.tags as unknown as string),
+    });
+  } catch (error) {
+    console.error("Error creating journal entry:", error);
+    return NextResponse.json({ error: "Failed to create entry" }, { status: 500 });
+  }
+}
