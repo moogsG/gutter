@@ -279,6 +279,23 @@ export default function DayDetailPage() {
     loadDayData();
   }, [date]);
 
+  // Poll for prep updates while any meeting is still "preparing"
+  useEffect(() => {
+    const hasPreparing = meetingPreps.some((m) => m.prepStatus === "preparing");
+    if (!hasPreparing) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/meeting-prep");
+        if (!res.ok) return;
+        const data = await res.json();
+        setMeetingPreps(data.meetings || []);
+      } catch {}
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [meetingPreps]);
+
   const handlePrevDay = () => {
     const currentDate = new Date(date + "T12:00:00");
     currentDate.setDate(currentDate.getDate() - 1);

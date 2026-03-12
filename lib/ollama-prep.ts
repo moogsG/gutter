@@ -39,7 +39,7 @@ const tools = [
           jql: {
             type: "string",
             description:
-              'JQL query string, e.g. \'project = GDEV AND text ~ "security" ORDER BY updated DESC\'',
+              'JQL query string. ONLY query project = GDEV or project = ISE. Never use other projects. e.g. \'project in (GDEV, ISE) AND text ~ "security" ORDER BY updated DESC\'',
           },
           maxResults: {
             type: "number",
@@ -112,18 +112,22 @@ async function searchJira(
   if (!token) return "Error: JIRA_API_TOKEN not set in environment";
 
   try {
-    // Use REST API v2 search (v3 search/jql returns minimal data without fields)
-    const params = new URLSearchParams({
-      jql,
-      maxResults: String(maxResults),
-      fields: "summary,status,assignee,updated,priority,labels",
-    });
-    const res = await fetch(`${url}/rest/api/2/search?${params}`, {
-      method: "GET",
+    // Enforce project scope — only GDEV and ISE allowed
+    const scopedJql = jql.replace(/project\s*=\s*(?!GDEV|ISE)[A-Z]+/gi, 'project in (GDEV, ISE)');
+    const finalJql = scopedJql.includes('project') ? scopedJql : `project in (GDEV, ISE) AND (${scopedJql})`;
+
+    // Use REST API v3 search/jql (v2 has been deprecated and removed)
+    const res = await fetch(`${url}/rest/api/3/search/jql`, {
+      method: "POST",
       headers: {
         Authorization: `Basic ${Buffer.from(`${email}:${token}`).toString("base64")}`,
         "Content-Type": "application/json",
       },
+      body: JSON.stringify({
+        jql: finalJql,
+        maxResults,
+        fields: ["summary", "status", "assignee", "updated", "priority", "labels", "description"],
+      }),
     });
 
     if (!res.ok) return `Jira API error: ${res.status} ${await res.text()}`;
@@ -286,7 +290,7 @@ ${parseSlackChannels()}
 
 NOTE: Only use channels listed above. Other channels will return errors.
 
-Jira projects: GDEV (Gradient dev), MSPC (MSPCentric)
+Jira projects to query: GDEV and ISE ONLY. Never query MSPC or any other project.
 
 Write your final prep notes in markdown with these sections:
 - **Context** — what this meeting is about (based on the title and calendar)
