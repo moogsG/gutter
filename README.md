@@ -74,6 +74,7 @@ Copy `.env.example` to `.env` and configure:
 | `JIRA_URL` | Jira instance URL | `https://company.atlassian.net` |
 | `JIRA_EMAIL` | Jira login email | `you@company.com` |
 | `JIRA_API_TOKEN` | Jira API token | `your-api-token` |
+| `JIRA_PROJECTS` | Comma-separated Jira project keys to track | `GDEV,ISE` |
 | `SLACK_BOT_TOKEN` | Slack bot token | `xoxb-...` |
 | `SLACK_CHANNELS` | Readable channels (pipe-delimited) | `C029BN2FBPD\|dev-chat,C027SHEDUET\|senior-devs` |
 
