@@ -1,0 +1,307 @@
+/**
+ * Tests for lib/vector-store.ts
+ *
+ * We mock @lancedb/lancedb and @xenova/transformers to keep tests fast
+ * and offline — no model downloads, no actual LanceDB I/O.
+ */
+
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// ─── Hoist mocks so vi.mock factories can access them ────────────────────────
+
+const { mockSearch, mockTable, mockDb } = vi.hoisted(() => {
+  const mockSearch = {
+    limit: vi.fn().mockReturnThis(),
+    toArray: vi.fn().mockResolvedValue([]),
+  };
+
+  const mockTable = {
+    search: vi.fn().mockReturnValue(mockSearch),
+    add: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn().mockResolvedValue(undefined),
+  };
+
+  const mockDb = {
+    tableNames: vi.fn().mockResolvedValue(["journal_entries", "meeting_transcripts"]),
+    openTable: vi.fn().mockResolvedValue(mockTable),
+    createTable: vi.fn().mockResolvedValue(mockTable),
+  };
+
+  return { mockSearch, mockTable, mockDb };
+});
+
+// ─── Mock LanceDB ─────────────────────────────────────────────────────────────
+
+vi.mock("@lancedb/lancedb", () => ({
+  connect: vi.fn().mockResolvedValue(mockDb),
+}));
+
+// ─── Mock @xenova/transformers ────────────────────────────────────────────────
+
+const MOCK_VECTOR = new Float32Array(384).fill(0.1);
+
+vi.mock("@xenova/transformers", () => ({
+  pipeline: vi.fn().mockResolvedValue(
+    vi.fn().mockResolvedValue({ data: MOCK_VECTOR })
+  ),
+  env: { cacheDir: "" },
+}));
+
+// ─── Import after mocks ───────────────────────────────────────────────────────
+
+import {
+  embed,
+  upsertJournalEntry,
+  upsertMeetingTranscript,
+  deleteJournalEntry,
+  searchJournalEntries,
+  searchMeetingContext,
+} from "@/lib/vector-store";
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
+describe("embed()", () => {
+  it("returns a number array of length 384", async () => {
+    const result = await embed("buy groceries");
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toHaveLength(384);
+    expect(typeof result[0]).toBe("number");
+  });
+
+  it("returns float values (~0.1)", async () => {
+    const result = await embed("test text");
+    expect(result.every((v) => Math.abs(v - 0.1) < 0.001)).toBe(true);
+  });
+});
+
+describe("upsertJournalEntry()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockTable.search.mockReturnValue(mockSearch);
+    mockSearch.limit.mockReturnThis();
+    mockSearch.toArray.mockResolvedValue([]);
+    mockTable.add.mockResolvedValue(undefined);
+    mockTable.delete.mockResolvedValue(undefined);
+    mockDb.tableNames.mockResolvedValue(["journal_entries", "meeting_transcripts"]);
+    mockDb.openTable.mockResolvedValue(mockTable);
+  });
+
+  it("calls table.add with id, text, vector fields", async () => {
+    await upsertJournalEntry({
+      id: "je-001",
+      text: "Buy groceries",
+      date: "2026-03-10",
+      signifier: "task",
+      collection_id: null,
+    });
+
+    expect(mockTable.add).toHaveBeenCalledOnce();
+    const [rows] = mockTable.add.mock.calls[0];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe("je-001");
+    expect(rows[0].text).toBe("Buy groceries");
+    expect(rows[0].vector).toHaveLength(384);
+  });
+
+  it("skips empty text", async () => {
+    await upsertJournalEntry({
+      id: "je-002",
+      text: "",
+      date: "2026-03-10",
+      signifier: "note",
+      collection_id: null,
+    });
+
+    expect(mockTable.add).not.toHaveBeenCalled();
+  });
+
+  it("attempts delete before insert (upsert semantics)", async () => {
+    await upsertJournalEntry({
+      id: "je-003",
+      text: "Fix the login bug",
+      date: "2026-03-11",
+      signifier: "task",
+      collection_id: null,
+    });
+
+    expect(mockTable.delete).toHaveBeenCalledWith('id = "je-003"');
+    expect(mockTable.add).toHaveBeenCalledOnce();
+  });
+
+  it("sets collection_id to empty string when null", async () => {
+    await upsertJournalEntry({
+      id: "je-004",
+      text: "Daily standup notes",
+      date: "2026-03-12",
+      signifier: "note",
+      collection_id: null,
+    });
+
+    const [rows] = mockTable.add.mock.calls[0];
+    expect(rows[0].collection_id).toBe("");
+  });
+});
+
+describe("upsertMeetingTranscript()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockTable.search.mockReturnValue(mockSearch);
+    mockSearch.limit.mockReturnThis();
+    mockSearch.toArray.mockResolvedValue([]);
+    mockTable.add.mockResolvedValue(undefined);
+    mockTable.delete.mockResolvedValue(undefined);
+    mockDb.tableNames.mockResolvedValue(["journal_entries", "meeting_transcripts"]);
+    mockDb.openTable.mockResolvedValue(mockTable);
+  });
+
+  it("inserts transcript with id, text, title, date, vector", async () => {
+    await upsertMeetingTranscript({
+      id: "mp-001",
+      text: "We discussed Q2 planning and sprints",
+      title: "Q2 Planning",
+      date: "2026-03-10",
+    });
+
+    expect(mockTable.add).toHaveBeenCalledOnce();
+    const [rows] = mockTable.add.mock.calls[0];
+    expect(rows[0].title).toBe("Q2 Planning");
+    expect(rows[0].vector).toHaveLength(384);
+  });
+
+  it("skips empty transcript text", async () => {
+    await upsertMeetingTranscript({
+      id: "mp-002",
+      text: "",
+      title: "Empty Meeting",
+      date: "2026-03-10",
+    });
+
+    expect(mockTable.add).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteJournalEntry()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockTable.delete.mockResolvedValue(undefined);
+    mockDb.tableNames.mockResolvedValue(["journal_entries"]);
+    mockDb.openTable.mockResolvedValue(mockTable);
+  });
+
+  it("calls table.delete with the entry id", async () => {
+    await deleteJournalEntry("je-005");
+    expect(mockTable.delete).toHaveBeenCalledWith('id = "je-005"');
+  });
+});
+
+describe("searchJournalEntries()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSearch.limit.mockReturnThis();
+    mockSearch.toArray.mockResolvedValue([]);
+    mockTable.search.mockReturnValue(mockSearch);
+    mockDb.tableNames.mockResolvedValue(["journal_entries"]);
+    mockDb.openTable.mockResolvedValue(mockTable);
+  });
+
+  it("returns mapped results from table.search", async () => {
+    mockSearch.toArray.mockResolvedValueOnce([
+      {
+        id: "je-010",
+        text: "Code review on the new auth module",
+        date: "2026-03-09",
+        signifier: "task",
+        collection_id: "",
+        _distance: 0.12,
+      },
+    ]);
+
+    const results = await searchJournalEntries("auth review", 3);
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe("je-010");
+    expect(results[0]._distance).toBe(0.12);
+  });
+
+  it("calls search with a vector and applies limit", async () => {
+    mockSearch.toArray.mockResolvedValueOnce([]);
+    await searchJournalEntries("deploy to staging", 5);
+
+    expect(mockTable.search).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.any(Number)])
+    );
+    expect(mockSearch.limit).toHaveBeenCalledWith(5);
+  });
+
+  it("returns empty array when no results", async () => {
+    mockSearch.toArray.mockResolvedValueOnce([]);
+    const results = await searchJournalEntries("xyz123nonexistent", 5);
+    expect(results).toEqual([]);
+  });
+});
+
+describe("searchMeetingContext()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSearch.limit.mockReturnThis();
+    mockSearch.toArray.mockResolvedValue([]);
+    mockTable.search.mockReturnValue(mockSearch);
+    mockDb.tableNames.mockResolvedValue(["journal_entries", "meeting_transcripts"]);
+    mockDb.openTable.mockResolvedValue(mockTable);
+  });
+
+  it("merges and sorts results from journal + transcripts by distance", async () => {
+    mockSearch.toArray
+      .mockResolvedValueOnce([
+        // journal result
+        {
+          id: "je-100",
+          text: "Discussed API rate limits",
+          date: "2026-03-08",
+          signifier: "note",
+          collection_id: "",
+          _distance: 0.2,
+        },
+      ])
+      .mockResolvedValueOnce([
+        // transcript result
+        {
+          id: "mp-100",
+          text: "We agreed on 100 req/min limit",
+          title: "API Design Review",
+          date: "2026-03-07",
+          _distance: 0.1,
+        },
+      ]);
+
+    const results = await searchMeetingContext("API rate limits", 5);
+
+    expect(results).toHaveLength(2);
+    // Sorted by distance — transcript (0.1) first
+    expect(results[0].id).toBe("mp-100");
+    expect(results[1].id).toBe("je-100");
+  });
+
+  it("returns at most topK results", async () => {
+    const manyJournalResults = Array.from({ length: 8 }, (_, i) => ({
+      id: `je-${i}`,
+      text: `entry ${i}`,
+      date: "2026-03-01",
+      signifier: "note",
+      collection_id: "",
+      _distance: i * 0.1,
+    }));
+
+    mockSearch.toArray
+      .mockResolvedValueOnce(manyJournalResults)
+      .mockResolvedValueOnce([]);
+
+    const results = await searchMeetingContext("planning", 3);
+    expect(results.length).toBeLessThanOrEqual(3);
+  });
+
+  it("returns empty array gracefully when tables are empty", async () => {
+    mockSearch.toArray.mockResolvedValue([]);
+    const results = await searchMeetingContext("Q2 planning", 5);
+    expect(results).toEqual([]);
+  });
+});

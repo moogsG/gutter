@@ -21,8 +21,8 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { cn } from "@/lib/utils";
 import { VoiceButton } from "./VoiceButton";
-import { useLazySearchEntriesQuery } from "@/store/api/journalApi";
-import type { JournalEntry, Signifier } from "@/types/journal";
+import { useLazySearchEntriesQuery, useLazySemanticSearchQuery } from "@/store/api/journalApi";
+import type { JournalEntry, SemanticSearchResult, Signifier } from "@/types/journal";
 
 interface OmniBarProps {
   onNavigateDate?: (date: string) => void;
@@ -139,8 +139,10 @@ export function OmniBar({ onNavigateDate, currentDate }: OmniBarProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<JournalEntry[]>([]);
+  const [semanticResults, setSemanticResults] = useState<SemanticSearchResult[]>([]);
   const router = useRouter();
   const [triggerSearch] = useLazySearchEntriesQuery();
+  const [triggerSemantic] = useLazySemanticSearchQuery();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // cmd+k listener
@@ -160,6 +162,7 @@ export function OmniBar({ onNavigateDate, currentDate }: OmniBarProps) {
     if (!open) {
       setQuery("");
       setSearchResults([]);
+      setSemanticResults([]);
     }
   }, [open]);
 
@@ -176,15 +179,30 @@ export function OmniBar({ onNavigateDate, currentDate }: OmniBarProps) {
       try {
         const result = await triggerSearch(query.trim()).unwrap();
         setSearchResults(result);
+
+        // Semantic fallback when FTS returns fewer than 3 results
+        if (result.length < 3) {
+          try {
+            const sem = await triggerSemantic({ q: query.trim(), limit: 5 }).unwrap();
+            // Exclude ids already in FTS results
+            const ftsIds = new Set(result.map((e) => e.id));
+            setSemanticResults(sem.filter((r) => !ftsIds.has(r.id)));
+          } catch {
+            setSemanticResults([]);
+          }
+        } else {
+          setSemanticResults([]);
+        }
       } catch {
         setSearchResults([]);
+        setSemanticResults([]);
       }
     }, 200);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, triggerSearch]);
+  }, [query, triggerSearch, triggerSemantic]);
 
   const handleSelect = useCallback(
     (value: string) => {
@@ -311,7 +329,7 @@ export function OmniBar({ onNavigateDate, currentDate }: OmniBarProps) {
               })}
             </Command.Group>
 
-            {/* Search results */}
+            {/* FTS search results */}
             {searchResults.length > 0 && (
               <Command.Group heading="Entries">
                 {searchResults.map((entry) => {
@@ -330,6 +348,32 @@ export function OmniBar({ onNavigateDate, currentDate }: OmniBarProps) {
                           {formatEntryDate(entry.date)}
                           {entry.status === "done" && " — completed"}
                           {entry.status === "migrated" && " — migrated"}
+                        </p>
+                      </div>
+                    </Command.Item>
+                  );
+                })}
+              </Command.Group>
+            )}
+
+            {/* Semantic search fallback (when FTS returns < 3 results) */}
+            {semanticResults.length > 0 && (
+              <Command.Group heading="Similar Entries">
+                {semanticResults.map((result) => {
+                  const Icon = SIGNIFIER_ICONS[result.signifier as Signifier] || Sparkles;
+                  return (
+                    <Command.Item
+                      key={result.id}
+                      value={`entry:${result.date}:${result.id}`}
+                      onSelect={handleSelect}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer aria-selected:bg-primary/10 aria-selected:text-primary"
+                    >
+                      <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
+                      <div className="flex-1 min-w-0">
+                        <p className="truncate text-foreground">{result.text}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatEntryDate(result.date)}
+                          {" — similar"}
                         </p>
                       </div>
                     </Command.Item>
