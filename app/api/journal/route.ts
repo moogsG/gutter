@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJournalDb } from "@/lib/journal-db";
+import { upsertJournalEntry } from "@/lib/vector-store";
 import type { JournalEntry, NewEntry } from "@/types/journal";
 
 export async function GET(req: NextRequest) {
@@ -79,6 +80,15 @@ export async function POST(req: NextRequest) {
     const entry = db
       .prepare("SELECT * FROM journal_entries WHERE id = ?")
       .get(id) as JournalEntry;
+
+    // Fire-and-forget embedding — don't block the response
+    upsertJournalEntry({
+      id: entry.id,
+      text: entry.text,
+      date: entry.date,
+      signifier: entry.signifier,
+      collection_id: entry.collection_id,
+    }).catch((err) => console.error("[vector-store] upsert failed:", err));
 
     return NextResponse.json({
       ...entry,

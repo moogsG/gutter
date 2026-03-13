@@ -42,3 +42,12 @@ export interface FutureLogEntry {
   migrated: boolean;
   created_at: string;
 }
+
+export interface SemanticSearchResult {
+  id: string;
+  text: string;
+  date: string;
+  signifier: string;
+  collection_id: string;
+  _distance: number;
+}
