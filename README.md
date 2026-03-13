@@ -313,12 +313,33 @@ gutter/
 | `[x]` | Apple Calendar — read + create events |
 | `[x]` | Slack — channels for meeting prep context |
 | `[ ]` | ClickUp — tasks, spaces, lists alongside Jira |
+| `[ ]` | Google Workspace CLI — Drive, Docs, Meet, Calendar via Google CLI |
 | `[ ]` | Email — read inbox, surface urgent messages, log replies as journal entries |
-| `[ ]` | Google Calendar — alternative to Apple Calendar for non-macOS |
+| `[ ]` | Google Calendar — for non-macOS or alongside Apple Calendar |
 | `[ ]` | Outlook / Microsoft 365 — calendar + email in one |
 | `[ ]` | iMessage / SMS — log conversations as entries, reply from journal |
 | `[ ]` | Linear — issue tracking alternative |
 | `[ ]` | GitHub Issues — surface PRs and issues in meeting prep |
+
+### meetings
+
+| Status | Feature |
+|--------|---------|
+| `[x]` | Manual transcript upload + AI summary |
+| `[x]` | AI meeting prep with Jira + Slack context |
+| `[ ]` | **Native Meetly support** — auto start/stop transcription when a meeting begins and ends. No more manual paste. |
+| `[ ]` | Transcript auto-linked to project/collection |
+| `[ ]` | Action items extracted and added as tasks automatically |
+
+### projects
+
+| Status | Feature |
+|--------|---------|
+| `[x]` | Collections — topic-specific pages |
+| `[ ]` | **Projects** — like collections but richer. Ties together transcripts, prep notes, tasks, and entries by feature or initiative. Queryable by LLM ("what have we discussed about auth in the last month?") |
+| `[ ]` | Automated project linking — entries and transcripts auto-tagged to the right project based on content |
+| `[ ]` | Project kanban — visual task board per project with status columns |
+| `[ ]` | Global kanban — all tasks across all projects in one board |
 
 ### AI
 
@@ -326,11 +347,14 @@ gutter/
 |--------|---------|
 | `[x]` | Ollama (local LLM) — meeting prep + NL commands |
 | `[x]` | whisper.cpp (local STT) — voice capture |
-| `[ ]` | RAG — embed your journal history, notes, and docs so meeting prep has real long-term context |
-| `[ ]` | LLM router — swap between Ollama, OpenAI, Claude, Gemini via env config |
+| `[ ]` | **RAG** — embed journal history, transcripts, notes, and docs. Meeting prep with real long-term context, not just what's in Jira right now. Needs proper graph DB investigation. |
+| `[ ]` | **Graph database** — store entities, relationships, and context as a knowledge graph (investigating: Neo4j, Memgraph, LanceDB, or SQLite + vector). Unlocks semantic querying across everything. |
+| `[ ]` | **LLM router** — swap between Ollama, OpenAI, Claude, Gemini via env config. If you already have an OpenCode, OpenClaw, or Claude Code subscription, use those credits instead of paying twice. |
+| `[ ]` | **Assign task to LLM** — flag any entry and delegate it to a connected AI agent. "Do this" sends it to Claude Code, OpenCode, or a local Ollama agent. |
+| `[ ]` | **Local agent integration** — first-class support for Claude Code, OpenCode, and OpenClaw. Tasks flow in, results flow back as journal entries. |
 | `[ ]` | Embeddings — semantic search across entries, not just FTS keyword matching |
-| `[ ]` | Auto-tagging — AI assigns signifiers and tags on capture |
-| `[ ]` | Weekly review — AI-generated summary of the week, habit patterns, open loops |
+| `[ ]` | Auto-tagging — AI assigns signifiers, tags, and project links on capture |
+| `[ ]` | Weekly review — AI-generated summary: what got done, open loops, patterns |
 
 ### journal
 
@@ -340,10 +364,30 @@ gutter/
 | `[x]` | Collections |
 | `[x]` | Migration flow |
 | `[x]` | Natural language commands |
+| `[ ]` | **Better migration** — smarter handling of unfinished tasks. Aging, context-aware migration suggestions, auto-carry vs auto-drop rules. |
 | `[ ]` | Habit tracker — daily check-ins with streak visualization |
 | `[ ]` | Recurring tasks — "every Monday" without manual entry |
 | `[ ]` | Entry templates — pre-fill daily standups, weekly reviews |
 | `[ ]` | Export — markdown, PDF, plain text |
+
+### multi-user
+
+| Status | Feature |
+|--------|---------|
+| `[x]` | Single-user auth |
+| `[ ]` | **Multi-user support** — invite teammates, shared collections/projects, per-user journal with shared task visibility. Role-based access (owner, member, viewer). |
+| `[ ]` | Shared kanban — team task board with assignees |
+| `[ ]` | @mentions in entries — notify teammates |
+
+### UX / UI
+
+| Status | Feature |
+|--------|---------|
+| `[x]` | Cyberpink · Tokyo Night · Rose Pine themes |
+| `[ ]` | **UX overhaul** — modernize the layout. Better hierarchy, improved mobile experience, smoother interactions. The bones are good, the polish needs work. |
+| `[ ]` | Keyboard-first navigation throughout |
+| `[ ]` | Command palette improvements — more actions, fuzzy match |
+| `[ ]` | Drag-and-drop entry reordering |
 
 ---
 
