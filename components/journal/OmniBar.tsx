@@ -16,6 +16,7 @@ import {
   Star,
   Heart,
   Clock,
+  Kanban,
 } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
   { id: "month", label: "Monthly Log", href: "/month", icon: Layers, keywords: ["month", "monthly", "overview", "calendar"] },
   { id: "future", label: "Future Log", href: "/future", icon: ArrowRight, keywords: ["future", "upcoming", "plan", "schedule"] },
   { id: "collections", label: "Collections", href: "/collections", icon: BookOpen, keywords: ["collections", "lists", "groups"] },
+  { id: "kanban", label: "Kanban", href: "/kanban", icon: Kanban, keywords: ["kanban", "board", "tasks", "status", "todo", "in progress", "blocked", "done"] },
   { id: "migrate", label: "Migrate Entries", href: "/migrate", icon: ArrowRight, keywords: ["migrate", "move", "transfer", "unresolved"] },
 ];
 

@@ -1,15 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 
+// Kanban status values map to DB status values
+const KANBAN_STATUS_MAP: Record<string, string[]> = {
+  todo: ["open"],
+  "in-progress": ["in-progress", "in_progress"],
+  blocked: ["blocked"],
+  done: ["complete", "done"],
+};
+
 export async function GET(req: NextRequest) {
   const db = getDb();
   const { searchParams } = new URL(req.url);
-  const status = searchParams.get("status") || "open";
+  const statusParam = searchParams.get("status");
   const project = searchParams.get("project");
   const limit = parseInt(searchParams.get("limit") || "100", 10);
 
-  let query = `SELECT * FROM tasks WHERE status = ?`;
-  const params: (string | number)[] = [status];
+  // Support kanban status filters (comma-separated or single value)
+  let statusValues: string[];
+  if (statusParam && KANBAN_STATUS_MAP[statusParam]) {
+    statusValues = KANBAN_STATUS_MAP[statusParam];
+  } else if (statusParam && statusParam.includes(",")) {
+    statusValues = statusParam.split(",").map((s) => s.trim());
+  } else {
+    statusValues = [statusParam || "open"];
+  }
+
+  const placeholders = statusValues.map(() => "?").join(", ");
+  let query = `SELECT * FROM tasks WHERE status IN (${placeholders})`;
+  const params: (string | number)[] = [...statusValues];
 
   if (project) {
     query += ` AND project = ?`;
@@ -33,6 +52,18 @@ export async function POST(req: NextRequest) {
 
   if (action === "complete" && taskId) {
     db.prepare(`UPDATE tasks SET status = 'complete', completed_at = datetime('now') WHERE id = ?`).run(taskId);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "move" && taskId && body.status) {
+    const allowedStatuses = ["open", "in-progress", "blocked", "complete"];
+    if (!allowedStatuses.includes(body.status)) {
+      return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    }
+    const completedAt = body.status === "complete" ? "datetime('now')" : "NULL";
+    db.prepare(
+      `UPDATE tasks SET status = ?, completed_at = ${completedAt} WHERE id = ?`
+    ).run(body.status, taskId);
     return NextResponse.json({ ok: true });
   }
 
