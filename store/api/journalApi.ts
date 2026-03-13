@@ -4,6 +4,7 @@ import type {
   NewEntry,
   Collection,
   FutureLogEntry,
+  SemanticSearchResult,
 } from "@/types/journal";
 
 export const journalApi = createApi({
@@ -200,6 +201,10 @@ export const journalApi = createApi({
     searchEntries: builder.query<JournalEntry[], string>({
       query: (q) => `/journal/search?q=${encodeURIComponent(q)}&limit=20`,
     }),
+    semanticSearch: builder.query<SemanticSearchResult[], { q: string; limit?: number }>({
+      query: ({ q, limit = 5 }) =>
+        `/search/semantic?q=${encodeURIComponent(q)}&limit=${limit}`,
+    }),
   }),
 });
 
@@ -217,4 +222,6 @@ export const {
   useCreateFutureLogEntryMutation,
   useSearchEntriesQuery,
   useLazySearchEntriesQuery,
+  useSemanticSearchQuery,
+  useLazySemanticSearchQuery,
 } = journalApi;

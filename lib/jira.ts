@@ -6,7 +6,18 @@ export const JIRA_ENABLED = process.env.JIRA_ENABLED !== "false";
 export const JIRA_HOST = process.env.JIRA_HOST || "";
 export const JIRA_EMAIL = process.env.JIRA_EMAIL || "";
 export const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN || "";
-export const JIRA_PROJECT = process.env.JIRA_PROJECT || "GDEV";
+// Comma-separated list of Jira projects to track (e.g. "GDEV,ISE")
+export const JIRA_PROJECTS = (process.env.JIRA_PROJECTS || process.env.JIRA_PROJECT || "GDEV")
+  .split(",")
+  .map((p) => p.trim())
+  .filter(Boolean);
+// For backwards compat / issue creation default
+export const JIRA_PROJECT = JIRA_PROJECTS[0];
+// JQL fragment: "project = GDEV" or "project IN (GDEV, ISE)"
+export const JIRA_PROJECT_JQL =
+  JIRA_PROJECTS.length === 1
+    ? `project = ${JIRA_PROJECTS[0]}`
+    : `project IN (${JIRA_PROJECTS.join(", ")})`;
 export const RETRY_ATTEMPTS = parseInt(process.env.JIRA_RETRY_ATTEMPTS || "3", 10);
 export const RETRY_DELAY_MS = parseInt(process.env.JIRA_RETRY_DELAY_MS || "1000", 10);
 export const CACHE_DURATION_MS = parseInt(process.env.JIRA_CACHE_DURATION_MS || "300000", 10); // 5 min
@@ -111,7 +122,7 @@ export async function fetchAssignedIssues(forceRefresh = false): Promise<JiraIss
   }
 
   const jql = encodeURIComponent(
-    `project = ${JIRA_PROJECT} AND assignee = currentUser() AND status != Done ORDER BY priority DESC, updated DESC`
+    `${JIRA_PROJECT_JQL} AND assignee = currentUser() AND status != Done ORDER BY priority DESC, updated DESC`
   );
 
   const url = `https://${JIRA_HOST}/rest/api/3/search?jql=${jql}&fields=summary,status,priority,assignee,updated&maxResults=50`;

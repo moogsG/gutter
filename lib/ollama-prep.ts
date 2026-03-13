@@ -1,7 +1,7 @@
 /**
  * Ollama-powered meeting prep with tool calling.
- * Uses Jira REST API, Slack API, and memory search to gather context,
- * then generates prep notes via a local Ollama model.
+ * Uses Jira REST API, Slack API, memory search, and LanceDB vector context
+ * to gather context, then generates prep notes via a local Ollama model.
  *
  * All config via ENV:
  *   OLLAMA_URL          - Ollama base URL (default: http://localhost:11434)
@@ -12,6 +12,30 @@
  *   SLACK_BOT_TOKEN     - Slack bot token for channel reads
  *   GUTTER_URL          - Gutter base URL for callback (default: http://localhost:3000)
  */
+
+import { searchMeetingContext } from "@/lib/vector-store";
+
+// ─── Vector context helper ────────────────────────────────────────────
+
+/**
+ * Fetch relevant past journal entries and meeting transcripts from LanceDB.
+ * Returns a formatted string block for injection into the meeting prep prompt.
+ * Silently returns empty string on error so it never blocks the main flow.
+ */
+async function fetchVectorContext(title: string): Promise<string> {
+  try {
+    const results = await searchMeetingContext(title, 5);
+    if (!results.length) return "";
+
+    const lines = results.map(
+      (r) => `[${r.date}] ${r.title !== `Journal: ${r.date}` ? `(${r.title}) ` : ""}${r.text}`
+    );
+
+    return `\n\n## Past Journal Context (semantic search)\n${lines.join("\n")}`;
+  } catch {
+    return "";
+  }
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -272,6 +296,9 @@ export async function generateMeetingPrep(
   const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
   const model = process.env.OLLAMA_MODEL || "llama3.1:8b";
 
+  // Fetch vector context in parallel with the rest of setup — never blocks
+  const vectorContext = await fetchVectorContext(title).catch(() => "");
+
   const systemPrompt = `You are a professional meeting prep assistant for a Staff Engineer at Gradient MSP. Your job is to gather relevant WORK context and write concise, actionable prep notes.
 
 IMPORTANT RULES:
@@ -304,7 +331,7 @@ Be concise. No fluff. Only work-relevant content.`;
     { role: "system", content: systemPrompt },
     {
       role: "user",
-      content: `Prepare me for the meeting: "${title}" at ${time} (Calendar: ${calendar}).${context ? `\n\nAdditional context: ${context}` : ""}
+      content: `Prepare me for the meeting: "${title}" at ${time} (Calendar: ${calendar}).${context ? `\n\nAdditional context: ${context}` : ""}${vectorContext}
 
 Use the tools to search for relevant information, then write prep notes.`,
     },

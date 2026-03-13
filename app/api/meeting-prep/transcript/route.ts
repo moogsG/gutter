@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { getDb } from '@/lib/db';
 import { env } from '@/lib/env';
+import { upsertMeetingTranscript } from '@/lib/vector-store';
 
 // POST: Upload transcript for a meeting — stores in DB and sends to Jynx for summarization
 export async function POST(request: Request) {
@@ -46,6 +47,14 @@ export async function POST(request: Request) {
     } catch (err) {
       console.error('Failed to send transcript to Jynx:', err);
     }
+
+    // Fire-and-forget embedding of transcript for RAG context
+    upsertMeetingTranscript({
+      id,
+      text: transcript,
+      title: title || 'Meeting',
+      date: occurrenceDate,
+    }).catch((err) => console.error('[vector-store] transcript upsert failed:', err));
 
     return Response.json({ ok: true, id });
   } catch (error) {

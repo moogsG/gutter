@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["better-sqlite3"],
+  serverExternalPackages: [
+    "better-sqlite3",
+    "@lancedb/lancedb",
+    "@xenova/transformers",
+  ],
 
   // 🛡️ Security Headers
   async headers() {
