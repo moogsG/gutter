@@ -299,6 +299,54 @@ gutter/
 
 ---
 
+## roadmap
+
+```
+[ ] = planned   [~] = in progress   [x] = done
+```
+
+### integrations
+
+| Status | Feature |
+|--------|---------|
+| `[x]` | Jira — issues, create, sync, status |
+| `[x]` | Apple Calendar — read + create events |
+| `[x]` | Slack — channels for meeting prep context |
+| `[ ]` | ClickUp — tasks, spaces, lists alongside Jira |
+| `[ ]` | Email — read inbox, surface urgent messages, log replies as journal entries |
+| `[ ]` | Google Calendar — alternative to Apple Calendar for non-macOS |
+| `[ ]` | Outlook / Microsoft 365 — calendar + email in one |
+| `[ ]` | iMessage / SMS — log conversations as entries, reply from journal |
+| `[ ]` | Linear — issue tracking alternative |
+| `[ ]` | GitHub Issues — surface PRs and issues in meeting prep |
+
+### AI
+
+| Status | Feature |
+|--------|---------|
+| `[x]` | Ollama (local LLM) — meeting prep + NL commands |
+| `[x]` | whisper.cpp (local STT) — voice capture |
+| `[ ]` | RAG — embed your journal history, notes, and docs so meeting prep has real long-term context |
+| `[ ]` | LLM router — swap between Ollama, OpenAI, Claude, Gemini via env config |
+| `[ ]` | Embeddings — semantic search across entries, not just FTS keyword matching |
+| `[ ]` | Auto-tagging — AI assigns signifiers and tags on capture |
+| `[ ]` | Weekly review — AI-generated summary of the week, habit patterns, open loops |
+
+### journal
+
+| Status | Feature |
+|--------|---------|
+| `[x]` | Daily, Monthly, Future log |
+| `[x]` | Collections |
+| `[x]` | Migration flow |
+| `[x]` | Natural language commands |
+| `[ ]` | Habit tracker — daily check-ins with streak visualization |
+| `[ ]` | Recurring tasks — "every Monday" without manual entry |
+| `[ ]` | Entry templates — pre-fill daily standups, weekly reviews |
+| `[ ]` | Export — markdown, PDF, plain text |
+
+---
+
 ## scripts
 
 ```bash
