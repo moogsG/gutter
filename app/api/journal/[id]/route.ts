@@ -1,15 +1,55 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJournalDb } from "@/lib/journal-db";
 import { upsertJournalEntry, deleteJournalEntry } from "@/lib/vector-store";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { validateId, validateJournalEntry, sanitizeText } from "@/lib/validation";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limit: 50 requests per minute for PATCH
+  const limited = rateLimitMiddleware(req, { windowMs: 60000, maxRequests: 50 });
+  if (limited) return limited;
+
   try {
     const { id } = await params;
+
+    // Validate ID
+    const idValidation = validateId(id);
+    if (!idValidation.valid) {
+      return NextResponse.json({ error: idValidation.error }, { status: 400 });
+    }
+
     const body = await req.json();
     const db = getJournalDb();
+
+    // Validate status if provided
+    if (body.status !== undefined) {
+      const allowedStatuses = ["open", "in-progress", "blocked", "done", "killed", "migrated"];
+      if (!allowedStatuses.includes(body.status)) {
+        return NextResponse.json({ error: "Invalid status value" }, { status: 400 });
+      }
+    }
+
+    // Validate signifier if provided
+    if (body.signifier !== undefined) {
+      const validSignifiers = ["•", "○", "×", "—", ">", "<", "*", "!", "?", "task"];
+      if (!validSignifiers.includes(body.signifier)) {
+        return NextResponse.json({ error: "Invalid signifier" }, { status: 400 });
+      }
+    }
+
+    // Sanitize text if provided
+    if (body.text !== undefined) {
+      if (typeof body.text !== "string") {
+        return NextResponse.json({ error: "Text must be a string" }, { status: 400 });
+      }
+      if (body.text.length > 50000) {
+        return NextResponse.json({ error: "Text exceeds maximum length" }, { status: 400 });
+      }
+      body.text = sanitizeText(body.text);
+    }
 
     const updates: string[] = [];
     const values: unknown[] = [];
@@ -81,8 +121,18 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limit: 30 requests per minute for DELETE (more restrictive)
+  const limited = rateLimitMiddleware(req, { windowMs: 60000, maxRequests: 30 });
+  if (limited) return limited;
+
   try {
     const { id } = await params;
+
+    // Validate ID
+    const idValidation = validateId(id);
+    if (!idValidation.valid) {
+      return NextResponse.json({ error: idValidation.error }, { status: 400 });
+    }
     const db = getJournalDb();
     const hardDelete = req.nextUrl.searchParams.get("hard") === "true";
 

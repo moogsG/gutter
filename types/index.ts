@@ -1,22 +1,13 @@
 export interface Task {
   id: string;
+  date: string;
   text: string;
-  project: string;
-  priority: string;
   status: string;
-  owner: string;
-  parent_id?: string | null;
-  due_date: string | null;
-  blocked_by: string | null;
-  jira_key: string | null;
-  created_at: string;
-  completed_at: string | null;
   tags: string;
-  context_notes?: string;
-  brand_font?: string;
-  business_model?: string;
-  external_business_name?: string;
-  subtasks?: Task[];
+  collection_id?: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DailyLogEntry {

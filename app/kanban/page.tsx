@@ -11,7 +11,8 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { Kanban } from "lucide-react";
+import { Kanban, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { KanbanColumn } from "@/components/journal/KanbanColumn";
 import { KanbanCardOverlay } from "@/components/journal/KanbanCard";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,6 +22,29 @@ import {
   type KanbanStatus,
 } from "@/store/api/tasksApi";
 import type { Task } from "@/types";
+
+function formatDate(date: Date): string {
+  return date.toISOString().split("T")[0];
+}
+
+function formatDisplayDate(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00");
+  return d.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatDisplayDateLong(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00");
+  return d.toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
 
 const COLUMNS: {
   id: KanbanStatus;
@@ -59,7 +83,7 @@ const COLUMN_TO_DB_STATUS: Record<KanbanStatus, string> = {
   todo: "open",
   "in-progress": "in-progress",
   blocked: "blocked",
-  done: "complete",
+  done: "done",
 };
 
 function KanbanSkeleton() {
@@ -80,13 +104,14 @@ function KanbanSkeleton() {
 }
 
 export default function KanbanPage() {
+  const [currentDate, setCurrentDate] = useState<string>(formatDate(new Date()));
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [moveTask] = useMoveTaskMutation();
 
-  const todoQuery = useGetKanbanTasksQuery("todo");
-  const inProgressQuery = useGetKanbanTasksQuery("in-progress");
-  const blockedQuery = useGetKanbanTasksQuery("blocked");
-  const doneQuery = useGetKanbanTasksQuery("done");
+  const todoQuery = useGetKanbanTasksQuery({ status: "todo", date: currentDate });
+  const inProgressQuery = useGetKanbanTasksQuery({ status: "in-progress", date: currentDate });
+  const blockedQuery = useGetKanbanTasksQuery({ status: "blocked", date: currentDate });
+  const doneQuery = useGetKanbanTasksQuery({ status: "done", date: currentDate });
 
   const isLoading =
     todoQuery.isLoading ||
@@ -107,6 +132,22 @@ export default function KanbanPage() {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
+
+  const goToPrevDay = useCallback(() => {
+    const d = new Date(currentDate + "T12:00:00");
+    d.setDate(d.getDate() - 1);
+    setCurrentDate(formatDate(d));
+  }, [currentDate]);
+
+  const goToNextDay = useCallback(() => {
+    const d = new Date(currentDate + "T12:00:00");
+    d.setDate(d.getDate() + 1);
+    setCurrentDate(formatDate(d));
+  }, [currentDate]);
+
+  const goToToday = useCallback(() => {
+    setCurrentDate(formatDate(new Date()));
+  }, []);
 
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
@@ -166,16 +207,44 @@ export default function KanbanPage() {
     [columnTasks, moveTask]
   );
 
+  const isToday = currentDate === formatDate(new Date());
+
   if (isLoading) return <KanbanSkeleton />;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Page header */}
-      <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border/50">
-        <Kanban className="w-4 h-4 text-primary" />
-        <h1 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-          Kanban Board
-        </h1>
+      {/* Page header with date navigation */}
+      <div className="flex items-center justify-between px-6 py-3 border-b border-border/50">
+        <div className="flex items-center gap-3">
+          <Kanban className="w-4 h-4 text-primary" />
+          <h1 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+            Kanban
+          </h1>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={goToPrevDay} className="w-8 h-8 p-0">
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button
+            variant={isToday ? "outline" : "secondary"}
+            size="sm"
+            onClick={goToToday}
+            className="h-8 px-3"
+          >
+            <Calendar className="w-3.5 h-3.5 mr-2" />
+            <span className="hidden sm:inline">Today</span>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={goToNextDay} className="w-8 h-8 p-0">
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+          <span className="text-sm font-medium text-foreground hidden sm:inline ml-2">
+            {formatDisplayDateLong(currentDate)}
+          </span>
+          <span className="text-sm font-medium text-foreground sm:hidden ml-1">
+            {formatDisplayDate(currentDate)}
+          </span>
+        </div>
       </div>
 
       {/* Board */}

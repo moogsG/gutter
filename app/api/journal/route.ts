@@ -1,13 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJournalDb } from "@/lib/journal-db";
 import { upsertJournalEntry } from "@/lib/vector-store";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { validateJournalEntry, sanitizeText } from "@/lib/validation";
 import type { JournalEntry, NewEntry } from "@/types/journal";
 
 export async function GET(req: NextRequest) {
+  // Rate limit: 100 requests per minute for GET
+  const limited = rateLimitMiddleware(req, { windowMs: 60000, maxRequests: 100 });
+  if (limited) return limited;
+
   const date = req.nextUrl.searchParams.get("date");
   
   if (!date) {
     return NextResponse.json({ error: "Date required" }, { status: 400 });
+  }
+
+  // Validate date format (YYYY-MM-DD)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return NextResponse.json({ error: "Invalid date format. Use YYYY-MM-DD" }, { status: 400 });
   }
 
   try {
@@ -49,6 +60,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limit: 30 requests per minute for POST (more restrictive)
+  const limited = rateLimitMiddleware(req, { windowMs: 60000, maxRequests: 30 });
+  if (limited) return limited;
+
   try {
     const body: NewEntry = await req.json();
     const { date, signifier, text, tags = [], parent_id } = body;
@@ -59,6 +74,30 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Validate date format
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
+    }
+
+    // Validate signifier (should be one of the allowed types)
+    const validSignifiers = ["•", "○", "×", "—", ">", "<", "*", "!", "?"];
+    if (!validSignifiers.includes(signifier)) {
+      return NextResponse.json({ error: "Invalid signifier" }, { status: 400 });
+    }
+
+    // Validate and sanitize entry content
+    const validation = validateJournalEntry({ content: text, tags });
+    if (!validation.valid) {
+      return NextResponse.json(
+        { error: "Validation failed", details: validation.errors },
+        { status: 400 }
+      );
+    }
+
+    // Use sanitized values
+    const sanitizedText = validation.sanitized?.content || text;
+    const sanitizedTags = validation.sanitized?.tags || tags;
 
     const db = getJournalDb();
     
@@ -75,7 +114,7 @@ export async function POST(req: NextRequest) {
       `INSERT INTO journal_entries 
        (id, date, signifier, text, status, tags, sort_order, parent_id, created_at, updated_at) 
        VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`
-    ).run(id, date, signifier, text, JSON.stringify(tags), sortOrder, parent_id || null, now, now);
+    ).run(id, date, signifier, sanitizedText, JSON.stringify(sanitizedTags), sortOrder, parent_id || null, now, now);
 
     const entry = db
       .prepare("SELECT * FROM journal_entries WHERE id = ?")
