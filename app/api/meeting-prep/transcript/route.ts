@@ -1,10 +1,16 @@
 import { randomUUID } from 'crypto';
+import { NextRequest } from 'next/server';
 import { getDb } from '@/lib/db';
 import { env } from '@/lib/env';
 import { upsertMeetingTranscript } from '@/lib/vector-store';
+import { rateLimitMiddleware } from '@/lib/rate-limit';
 
 // POST: Upload transcript for a meeting — stores in DB and sends to Jynx for summarization
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  // Rate limit transcript uploads (10 per minute)
+  const limited = rateLimitMiddleware(request, { windowMs: 60000, maxRequests: 10 });
+  if (limited) return limited;
+
   try {
     const { eventId, title, time, calendar, transcript } = await request.json();
 

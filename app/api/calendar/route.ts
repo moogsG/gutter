@@ -2,6 +2,8 @@ import { execSync } from "child_process";
 import { readFileSync, unlinkSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
+import { NextRequest } from "next/server";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 const ACCLI_CMD = process.env.ACCLI_CMD || "accli";
 const TMP_DIR = "/tmp/gutter-calendar";
@@ -45,7 +47,11 @@ function fetchCalendarEvents(
   }
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  // Rate limit calendar fetches (50 per minute)
+  const limited = rateLimitMiddleware(request, { windowMs: 60000, maxRequests: 50 });
+  if (limited) return limited;
+
   try {
     const { searchParams } = new URL(request.url);
     const month = searchParams.get("month");

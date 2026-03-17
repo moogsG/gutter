@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createIssue, JIRA_ENABLED } from "@/lib/jira";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
+  // Restrictive rate limit for issue creation (10 per minute)
+  const limited = rateLimitMiddleware(request, { windowMs: 60000, maxRequests: 10 });
+  if (limited) return limited;
+
   try {
     if (!JIRA_ENABLED) {
       return NextResponse.json(

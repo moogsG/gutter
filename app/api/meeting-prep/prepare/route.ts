@@ -1,9 +1,15 @@
 import { randomUUID } from 'crypto';
+import { NextRequest } from 'next/server';
 import { getDb } from '@/lib/db';
 import { generateMeetingPrep } from '@/lib/ollama-prep';
+import { rateLimitMiddleware } from '@/lib/rate-limit';
 
 // POST: Request prep for a meeting — generates via Ollama with tool calling
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  // Tight rate limit for expensive LLM operations (10 per minute)
+  const limited = rateLimitMiddleware(request, { windowMs: 60000, maxRequests: 10 });
+  if (limited) return limited;
+
   try {
     const { eventId, title, time, calendar, context } = await request.json();
 

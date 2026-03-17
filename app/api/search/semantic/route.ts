@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchJournalEntries } from "@/lib/vector-store";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 /**
  * GET /api/search/semantic?q=<query>[&limit=<n>]
@@ -8,6 +9,10 @@ import { searchJournalEntries } from "@/lib/vector-store";
  * Used as a fallback by the OmniBar when FTS returns < 3 results.
  */
 export async function GET(req: NextRequest) {
+  // Rate limit semantic search (30 per minute)
+  const limited = rateLimitMiddleware(req, { windowMs: 60000, maxRequests: 30 });
+  if (limited) return limited;
+
   const query = req.nextUrl.searchParams.get("q");
   const limit = Math.min(
     parseInt(req.nextUrl.searchParams.get("limit") || "5", 10),

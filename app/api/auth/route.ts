@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "crypto";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 const AUTH_PASSWORD = process.env.AUTH_PASSWORD || "";
 const AUTH_SECRET = process.env.AUTH_SECRET || "gutter-default-secret-change-me";
@@ -19,6 +20,10 @@ export function verifyToken(token: string): boolean {
 
 // POST: login
 export async function POST(req: NextRequest) {
+  // Strict rate limit for login attempts (5 attempts per minute per IP)
+  const limited = rateLimitMiddleware(req, { windowMs: 60000, maxRequests: 5 });
+  if (limited) return limited;
+
   try {
     const { password } = await req.json();
 
