@@ -1,11 +1,11 @@
 import { existsSync, unlinkSync } from "node:fs";
-import Database from "better-sqlite3";
+import Database from "@/lib/sqlite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const TEST_DB_PATH = "./test-tasks.db";
 
 describe("Database operations", () => {
-	let db: Database.Database;
+	let db: Database;
 
 	beforeAll(() => {
 		db = new Database(TEST_DB_PATH);
@@ -112,7 +112,8 @@ describe("Database operations", () => {
 			const entry = db
 				.prepare("SELECT * FROM journal_entries WHERE id = ?")
 				.get(id);
-			expect(entry).toBeUndefined();
+			// Bun's sqlite returns null, better-sqlite3 returns undefined
+			expect(entry).toBeFalsy();
 		});
 
 		it("filters entries by signifier", () => {

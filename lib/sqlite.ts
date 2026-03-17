@@ -68,6 +68,12 @@ export class Database {
 			return this._db.pragma(pragma);
 		}
 	}
+
+	close(): void {
+		if (this._db && typeof this._db.close === "function") {
+			this._db.close();
+		}
+	}
 }
 
 export default Database;
