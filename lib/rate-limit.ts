@@ -3,6 +3,8 @@
  * For production with multiple instances, consider Redis-backed implementation
  */
 
+import { logRateLimitExceeded, getClientIp } from "./security-logger";
+
 interface RateLimitConfig {
   windowMs: number; // Time window in milliseconds
   maxRequests: number; // Max requests per window
@@ -79,14 +81,18 @@ export function rateLimitMiddleware(
   config?: RateLimitConfig
 ): Response | null {
   // Use IP address as identifier (fallback to a default if not available)
-  const forwardedFor = req.headers.get("x-forwarded-for");
-  const ip = forwardedFor?.split(",")[0]?.trim() || 
-             req.headers.get("x-real-ip") || 
-             "unknown";
+  const ip = getClientIp(req);
 
   const { allowed, resetTime, remaining } = checkRateLimit(ip, config);
 
   if (!allowed) {
+    // Log rate limit exceeded event
+    const url = new URL(req.url);
+    logRateLimitExceeded(req, url.pathname, {
+      limit: config?.maxRequests,
+      windowMs: config?.windowMs,
+    }).catch(err => console.error("[rate-limit] Failed to log event:", err));
+
     return new Response(
       JSON.stringify({
         error: "Too many requests",
