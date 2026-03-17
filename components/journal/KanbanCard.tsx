@@ -8,7 +8,6 @@ import type { Task } from "@/types";
 import {
   Square,
   CheckSquare,
-  Star,
   AlertTriangle,
   GripVertical,
 } from "lucide-react";
@@ -18,17 +17,11 @@ interface KanbanCardProps {
   isDragging?: boolean;
 }
 
-function SignifierBadge({ task }: { task: Task }) {
-  if (task.priority === "urgent") {
-    return <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-destructive" />;
-  }
-  if (task.priority === "high") {
-    return <Star className="w-3.5 h-3.5 shrink-0 text-chart-5" />;
-  }
-  if (task.status === "complete" || task.status === "done") {
+function StatusIcon({ status }: { status: string }) {
+  if (status === "done") {
     return <CheckSquare className="w-3.5 h-3.5 shrink-0 text-primary" />;
   }
-  if (task.status === "blocked") {
+  if (status === "blocked") {
     return <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-chart-5" />;
   }
   return <Square className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />;
@@ -38,6 +31,12 @@ function formatShortDate(dateStr: string | null): string | null {
   if (!dateStr) return null;
   const d = new Date(dateStr.includes("T") ? dateStr : `${dateStr}T12:00:00`);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function parseTags(tags: string | string[] | null): string[] {
+  if (!tags) return [];
+  if (Array.isArray(tags)) return tags;
+  try { return JSON.parse(tags); } catch { return []; }
 }
 
 export function KanbanCard({ task, isDragging }: KanbanCardProps) {
@@ -51,6 +50,7 @@ export function KanbanCard({ task, isDragging }: KanbanCardProps) {
   } = useSortable({ id: task.id });
 
   const isActive = isDragging || isSortableDragging;
+  const tags = parseTags(task.tags as string | string[] | null);
 
   // dnd-kit requires the computed transform/transition to be applied via style
   // This is a mandatory runtime value — allowed per CODING-STANDARDS (dynamic runtime exception)
@@ -82,30 +82,26 @@ export function KanbanCard({ task, isDragging }: KanbanCardProps) {
 
       {/* Card content */}
       <div className="flex items-start gap-2 pr-5">
-        <SignifierBadge task={task} />
+        <StatusIcon status={task.status} />
         <p className="text-sm text-foreground leading-snug line-clamp-3">
           {task.text}
         </p>
       </div>
 
-      {/* Footer: project tag + date */}
+      {/* Footer: tags + date */}
       <div className="mt-2.5 flex items-center gap-2 flex-wrap">
-        {task.project && task.project !== "General" && (
+        {tags.map((tag) => (
           <Badge
+            key={tag}
             variant="outline"
             className="text-[10px] px-1.5 py-0 h-4 font-normal border-border/60 text-muted-foreground"
           >
-            {task.project}
+            {tag}
           </Badge>
-        )}
-        {task.due_date && (
-          <span className="text-[10px] text-muted-foreground">
-            {formatShortDate(task.due_date)}
-          </span>
-        )}
-        {!task.due_date && task.created_at && (
+        ))}
+        {task.date && (
           <span className="text-[10px] text-muted-foreground/50">
-            {formatShortDate(task.created_at)}
+            {formatShortDate(task.date)}
           </span>
         )}
       </div>
@@ -115,23 +111,26 @@ export function KanbanCard({ task, isDragging }: KanbanCardProps) {
 
 // Overlay card shown while dragging — no transform applied, full opacity
 export function KanbanCardOverlay({ task }: { task: Task }) {
+  const tags = parseTags(task.tags as string | string[] | null);
+
   return (
     <div className="rounded-lg border border-primary/60 bg-card p-3 shadow-xl ring-2 ring-primary/30 rotate-1 cursor-grabbing select-none">
       <div className="flex items-start gap-2 pr-5">
-        <SignifierBadge task={task} />
+        <StatusIcon status={task.status} />
         <p className="text-sm text-foreground leading-snug line-clamp-3">
           {task.text}
         </p>
       </div>
       <div className="mt-2.5 flex items-center gap-2 flex-wrap">
-        {task.project && task.project !== "General" && (
+        {tags.map((tag) => (
           <Badge
+            key={tag}
             variant="outline"
             className="text-[10px] px-1.5 py-0 h-4 font-normal border-border/60 text-muted-foreground"
           >
-            {task.project}
+            {tag}
           </Badge>
-        )}
+        ))}
       </div>
     </div>
   );

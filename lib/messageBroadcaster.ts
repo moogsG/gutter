@@ -1,23 +1,23 @@
-import { EventEmitter } from 'events';
+import { EventEmitter } from "node:events";
 
 class MessageBroadcaster extends EventEmitter {
-  private static instance: MessageBroadcaster;
+	private static instance: MessageBroadcaster;
 
-  private constructor() {
-    super();
-    this.setMaxListeners(100); // Allow many concurrent SSE connections
-  }
+	private constructor() {
+		super();
+		this.setMaxListeners(100); // Allow many concurrent SSE connections
+	}
 
-  static getInstance(): MessageBroadcaster {
-    if (!MessageBroadcaster.instance) {
-      MessageBroadcaster.instance = new MessageBroadcaster();
-    }
-    return MessageBroadcaster.instance;
-  }
+	static getInstance(): MessageBroadcaster {
+		if (!MessageBroadcaster.instance) {
+			MessageBroadcaster.instance = new MessageBroadcaster();
+		}
+		return MessageBroadcaster.instance;
+	}
 
-  broadcast(message: any) {
-    this.emit('newMessage', message);
-  }
+	broadcast(message: any) {
+		this.emit("newMessage", message);
+	}
 }
 
 export const messageBroadcaster = MessageBroadcaster.getInstance();

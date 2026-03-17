@@ -5,18 +5,18 @@
  */
 
 const CALENDAR_COLOR_MAP: Record<string, string> = {
-  "Gradient": "cal-gradient",
-  "Work": "cal-gradient",
-  "Calendar": "cal-gradient",
-  "Family Calendar": "cal-family",
-  "Family": "cal-family",
-  "Home": "cal-home",
-  "Personal": "cal-home",
-  "JW": "cal-jw",
-  "School": "cal-school",
-  "Birthdays": "cal-birthdays",
-  "Canadian Holidays": "cal-holidays",
-  "Holidays": "cal-holidays",
+	Gradient: "cal-gradient",
+	Work: "cal-gradient",
+	Calendar: "cal-gradient",
+	"Family Calendar": "cal-family",
+	Family: "cal-family",
+	Home: "cal-home",
+	Personal: "cal-home",
+	JW: "cal-jw",
+	School: "cal-school",
+	Birthdays: "cal-birthdays",
+	"Canadian Holidays": "cal-holidays",
+	Holidays: "cal-holidays",
 };
 
 /**
@@ -24,18 +24,18 @@ const CALENDAR_COLOR_MAP: Record<string, string> = {
  * Returns e.g. "cal-gradient" — use as `bg-cal-gradient`, `text-cal-gradient`, etc.
  */
 export function getCalendarColorToken(calendarName: string): string {
-  return CALENDAR_COLOR_MAP[calendarName] || "cal-home";
+	return CALENDAR_COLOR_MAP[calendarName] || "cal-home";
 }
 
 /**
  * All known calendar tokens for rendering legends.
  */
 export const CALENDAR_TOKENS = [
-  { name: "Gradient", token: "cal-gradient" },
-  { name: "Family", token: "cal-family" },
-  { name: "Home", token: "cal-home" },
-  { name: "JW", token: "cal-jw" },
-  { name: "School", token: "cal-school" },
-  { name: "Birthdays", token: "cal-birthdays" },
-  { name: "Holidays", token: "cal-holidays" },
+	{ name: "Gradient", token: "cal-gradient" },
+	{ name: "Family", token: "cal-family" },
+	{ name: "Home", token: "cal-home" },
+	{ name: "JW", token: "cal-jw" },
+	{ name: "School", token: "cal-school" },
+	{ name: "Birthdays", token: "cal-birthdays" },
+	{ name: "Holidays", token: "cal-holidays" },
 ] as const;

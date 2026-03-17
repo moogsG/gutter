@@ -3,6 +3,11 @@ import type { CalendarEvent, Task } from "@/types";
 
 export type KanbanStatus = "todo" | "in-progress" | "blocked" | "done";
 
+export interface KanbanQueryArgs {
+  status: KanbanStatus;
+  date?: string;
+}
+
 export interface MoveTaskPayload {
   taskId: string;
   status: string;
@@ -23,11 +28,15 @@ export const tasksApi = createApi({
       providesTags: (result, error, month) => [{ type: "Calendar", id: month }],
       keepUnusedDataFor: 30,
     }),
-    // Kanban: fetch tasks for a specific kanban column status
-    getKanbanTasks: builder.query<Task[], KanbanStatus>({
-      query: (status) => `/tasks?status=${status}&limit=200`,
-      providesTags: (result, error, status) => [
-        { type: "KanbanTasks", id: status },
+    // Kanban: fetch tasks for a specific status + optional date
+    getKanbanTasks: builder.query<Task[], KanbanQueryArgs>({
+      query: ({ status, date }) => {
+        const params = new URLSearchParams({ status, limit: "200" });
+        if (date) params.set("date", date);
+        return `/tasks?${params.toString()}`;
+      },
+      providesTags: (result, error, { status, date }) => [
+        { type: "KanbanTasks", id: `${status}-${date ?? "all"}` },
         "KanbanTasks",
       ],
     }),
