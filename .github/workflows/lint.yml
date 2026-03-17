@@ -22,7 +22,7 @@ jobs:
         run: bun install
 
       - name: Run Biome check
-        run: bun biome check .
+        run: bunx @biomejs/biome check .
 
       - name: Type check
         run: bunx tsc --noEmit
