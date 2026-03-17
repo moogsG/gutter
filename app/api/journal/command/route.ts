@@ -1,35 +1,35 @@
-import { NextRequest, NextResponse } from "next/server";
-import { randomBytes } from "crypto";
-import { getJournalDb } from "@/lib/journal-db";
-import { getDb } from "@/lib/db";
+import { randomBytes } from "node:crypto";
+import { type NextRequest, NextResponse } from "next/server";
 import { createCalendarEvent } from "@/lib/calendar";
+import { getDb } from "@/lib/db";
+import { getJournalDb } from "@/lib/journal-db";
 
 function uniqueId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${randomBytes(4).toString("hex")}`;
+	return `${prefix}-${Date.now()}-${randomBytes(4).toString("hex")}`;
 }
 
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
 const OLLAMA_MODEL = process.env.JOURNAL_COMMAND_MODEL || "qwen2.5-coder:7b";
 
 interface CommandRequest {
-  command: string;
-  context?: {
-    currentDate?: string;
-    currentPage?: string;
-  };
+	command: string;
+	context?: {
+		currentDate?: string;
+		currentPage?: string;
+	};
 }
 
 interface LLMAction {
-  method: "GET" | "POST" | "PATCH" | "DELETE";
-  path: string;
-  body?: Record<string, unknown>;
-  query?: Record<string, string>;
-  parent_ref?: number; // index into actions array — use that action's result id as parent_id
+	method: "GET" | "POST" | "PATCH" | "DELETE";
+	path: string;
+	body?: Record<string, unknown>;
+	query?: Record<string, string>;
+	parent_ref?: number; // index into actions array — use that action's result id as parent_id
 }
 
 interface LLMResponse {
-  actions: LLMAction[];
-  message: string;
+	actions: LLMAction[];
+	message: string;
 }
 
 const SYSTEM_PROMPT = `You are a bullet journal command interpreter. Parse natural language commands into API calls.
@@ -108,313 +108,447 @@ Subtask example:
 If unclear:
 { "actions": [], "message": "I didn't understand that. Try 'buy milk' or 'create a Books collection'." }`;
 
-function buildUserPrompt(command: string, context?: CommandRequest["context"]): string {
-  const date = context?.currentDate || new Date().toISOString().split("T")[0];
-  const page = context?.currentPage || "daily";
+function buildUserPrompt(
+	command: string,
+	context?: CommandRequest["context"],
+): string {
+	const date = context?.currentDate || new Date().toISOString().split("T")[0];
+	const page = context?.currentPage || "daily";
 
-  // Calculate relative dates
-  const d = new Date(date + "T12:00:00");
-  const yesterday = new Date(d);
-  yesterday.setDate(d.getDate() - 1);
-  const tomorrow = new Date(d);
-  tomorrow.setDate(d.getDate() + 1);
+	// Calculate relative dates
+	const d = new Date(`${date}T12:00:00`);
+	const yesterday = new Date(d);
+	yesterday.setDate(d.getDate() - 1);
+	const tomorrow = new Date(d);
+	tomorrow.setDate(d.getDate() + 1);
 
-  return `Current date: ${date} (yesterday: ${yesterday.toISOString().split("T")[0]}, tomorrow: ${tomorrow.toISOString().split("T")[0]})
+	return `Current date: ${date} (yesterday: ${yesterday.toISOString().split("T")[0]}, tomorrow: ${tomorrow.toISOString().split("T")[0]})
 Current page: ${page}
 Current month: ${date.substring(0, 7)}
 
 Command: ${command}`;
 }
 
-async function callOllama(systemPrompt: string, userPrompt: string): Promise<LLMResponse> {
-  const response = await fetch(`${OLLAMA_URL}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: OLLAMA_MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      stream: false,
-      format: "json",
-      options: {
-        temperature: 0.1,
-        num_predict: 512,
-      },
-    }),
-  });
+async function callOllama(
+	systemPrompt: string,
+	userPrompt: string,
+): Promise<LLMResponse> {
+	const response = await fetch(`${OLLAMA_URL}/api/chat`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			model: OLLAMA_MODEL,
+			messages: [
+				{ role: "system", content: systemPrompt },
+				{ role: "user", content: userPrompt },
+			],
+			stream: false,
+			format: "json",
+			options: {
+				temperature: 0.1,
+				num_predict: 512,
+			},
+		}),
+	});
 
-  if (!response.ok) {
-    throw new Error(`Ollama request failed: ${response.status} ${response.statusText}`);
-  }
+	if (!response.ok) {
+		throw new Error(
+			`Ollama request failed: ${response.status} ${response.statusText}`,
+		);
+	}
 
-  const data = await response.json();
-  const content = data.message?.content?.trim();
+	const data = await response.json();
+	const content = data.message?.content?.trim();
 
-  if (!content) {
-    throw new Error("Empty response from Ollama");
-  }
+	if (!content) {
+		throw new Error("Empty response from Ollama");
+	}
 
-  const parsed = JSON.parse(content);
+	const parsed = JSON.parse(content);
 
-  // Validate structure
-  if (!parsed.actions || !Array.isArray(parsed.actions)) {
-    return { actions: [], message: parsed.message || "Command not understood." };
-  }
+	// Validate structure
+	if (!parsed.actions || !Array.isArray(parsed.actions)) {
+		return {
+			actions: [],
+			message: parsed.message || "Command not understood.",
+		};
+	}
 
-  return {
-    actions: parsed.actions,
-    message: parsed.message || "Done.",
-  };
+	return {
+		actions: parsed.actions,
+		message: parsed.message || "Done.",
+	};
 }
 
-async function executeAction(action: LLMAction): Promise<{ ok: boolean; data?: unknown; error?: string }> {
-  // Execute all actions locally against the DB to avoid self-signed cert issues
-  // and unnecessary HTTP round-trips
-  if (action.method === "GET") {
-    return executeGetLocally(action);
-  }
+async function executeAction(
+	action: LLMAction,
+): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+	// Execute all actions locally against the DB to avoid self-signed cert issues
+	// and unnecessary HTTP round-trips
+	if (action.method === "GET") {
+		return executeGetLocally(action);
+	}
 
-  return await executeMutationLocally(action);
+	return await executeMutationLocally(action);
 }
 
-async function executeMutationLocally(action: LLMAction): Promise<{ ok: boolean; data?: unknown; error?: string }> {
-  try {
-    const db = getJournalDb();
+async function executeMutationLocally(
+	action: LLMAction,
+): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+	try {
+		const db = getJournalDb();
 
-    // POST /api/journal — Create entry
-    if (action.method === "POST" && action.path === "/api/journal" && action.body) {
-      const { date, signifier, text, tags = [], parent_id } = action.body as any;
-      if (!date || !signifier || !text) {
-        return { ok: false, error: "Missing required fields: date, signifier, text" };
-      }
-      const maxOrder = parent_id
-        ? db.prepare("SELECT MAX(sort_order) as max FROM journal_entries WHERE date = ? AND parent_id = ?").get(date as string, parent_id) as { max: number | null }
-        : db.prepare("SELECT MAX(sort_order) as max FROM journal_entries WHERE date = ? AND parent_id IS NULL").get(date as string) as { max: number | null };
-      const sortOrder = (maxOrder?.max ?? -1) + 1;
-      const id = uniqueId("je");
-      const now = new Date().toISOString();
-      db.prepare(
-        `INSERT INTO journal_entries (id, date, signifier, text, status, tags, sort_order, parent_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`
-      ).run(id, date, signifier, text, JSON.stringify(tags), sortOrder, parent_id || null, now, now);
-      return { ok: true, data: { id, date, signifier, text, status: "open", parent_id } };
-    }
+		// POST /api/journal — Create entry
+		if (
+			action.method === "POST" &&
+			action.path === "/api/journal" &&
+			action.body
+		) {
+			const {
+				date,
+				signifier,
+				text,
+				tags = [],
+				parent_id,
+			} = action.body as any;
+			if (!date || !signifier || !text) {
+				return {
+					ok: false,
+					error: "Missing required fields: date, signifier, text",
+				};
+			}
+			const maxOrder = parent_id
+				? (db
+						.prepare(
+							"SELECT MAX(sort_order) as max FROM journal_entries WHERE date = ? AND parent_id = ?",
+						)
+						.get(date as string, parent_id) as { max: number | null })
+				: (db
+						.prepare(
+							"SELECT MAX(sort_order) as max FROM journal_entries WHERE date = ? AND parent_id IS NULL",
+						)
+						.get(date as string) as { max: number | null });
+			const sortOrder = (maxOrder?.max ?? -1) + 1;
+			const id = uniqueId("je");
+			const now = new Date().toISOString();
+			db.prepare(
+				`INSERT INTO journal_entries (id, date, signifier, text, status, tags, sort_order, parent_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`,
+			).run(
+				id,
+				date,
+				signifier,
+				text,
+				JSON.stringify(tags),
+				sortOrder,
+				parent_id || null,
+				now,
+				now,
+			);
+			return {
+				ok: true,
+				data: { id, date, signifier, text, status: "open", parent_id },
+			};
+		}
 
-    // PATCH /api/journal/:id — Update entry
-    if (action.method === "PATCH" && action.path.startsWith("/api/journal/")) {
-      const id = action.path.split("/").pop();
-      if (!id || !action.body) return { ok: false, error: "Missing id or body" };
-      const updates: string[] = ["updated_at = ?"];
-      const values: any[] = [new Date().toISOString()];
-      const body = action.body as any;
-      if (body.status) { updates.push("status = ?"); values.push(body.status); }
-      if (body.text) { updates.push("text = ?"); values.push(body.text); }
-      if (body.signifier) { updates.push("signifier = ?"); values.push(body.signifier); }
-      if (body.collection_id !== undefined) { updates.push("collection_id = ?"); values.push(body.collection_id); }
-      values.push(id);
-      const result = db.prepare(`UPDATE journal_entries SET ${updates.join(", ")} WHERE id = ?`).run(...values);
-      return { ok: result.changes > 0, data: { id, updated: result.changes } };
-    }
+		// PATCH /api/journal/:id — Update entry
+		if (action.method === "PATCH" && action.path.startsWith("/api/journal/")) {
+			const id = action.path.split("/").pop();
+			if (!id || !action.body)
+				return { ok: false, error: "Missing id or body" };
+			const updates: string[] = ["updated_at = ?"];
+			const values: any[] = [new Date().toISOString()];
+			const body = action.body as any;
+			if (body.status) {
+				updates.push("status = ?");
+				values.push(body.status);
+			}
+			if (body.text) {
+				updates.push("text = ?");
+				values.push(body.text);
+			}
+			if (body.signifier) {
+				updates.push("signifier = ?");
+				values.push(body.signifier);
+			}
+			if (body.collection_id !== undefined) {
+				updates.push("collection_id = ?");
+				values.push(body.collection_id);
+			}
+			values.push(id);
+			const result = db
+				.prepare(
+					`UPDATE journal_entries SET ${updates.join(", ")} WHERE id = ?`,
+				)
+				.run(...values);
+			return { ok: result.changes > 0, data: { id, updated: result.changes } };
+		}
 
-    // DELETE /api/journal/:id — Kill entry
-    if (action.method === "DELETE" && action.path.startsWith("/api/journal/")) {
-      const id = action.path.split("/").pop();
-      if (!id) return { ok: false, error: "Missing id" };
-      const result = db.prepare("UPDATE journal_entries SET status = 'killed', updated_at = ? WHERE id = ?")
-        .run(new Date().toISOString(), id);
-      return { ok: result.changes > 0, data: { id, killed: true } };
-    }
+		// DELETE /api/journal/:id — Kill entry
+		if (action.method === "DELETE" && action.path.startsWith("/api/journal/")) {
+			const id = action.path.split("/").pop();
+			if (!id) return { ok: false, error: "Missing id" };
+			const result = db
+				.prepare(
+					"UPDATE journal_entries SET status = 'killed', updated_at = ? WHERE id = ?",
+				)
+				.run(new Date().toISOString(), id);
+			return { ok: result.changes > 0, data: { id, killed: true } };
+		}
 
-    // POST /api/journal/migrate
-    if (action.method === "POST" && action.path.includes("/migrate") && action.body) {
-      const { entryIds, targetDate } = action.body as any;
-      if (!entryIds?.length || !targetDate) return { ok: false, error: "Missing entryIds or targetDate" };
-      const now = new Date().toISOString();
-      let migrated = 0;
-      for (const entryId of entryIds) {
-        const entry = db.prepare("SELECT * FROM journal_entries WHERE id = ?").get(entryId) as any;
-        if (!entry) continue;
-        const maxOrder = db.prepare("SELECT MAX(sort_order) as max FROM journal_entries WHERE date = ?")
-          .get(targetDate) as { max: number | null };
-        const newId = uniqueId("je");
-        db.prepare(
-          `INSERT INTO journal_entries (id, date, signifier, text, status, migrated_from, tags, sort_order, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`
-        ).run(newId, targetDate, entry.signifier, entry.text, entryId, entry.tags || "[]", (maxOrder?.max ?? -1) + 1, now, now);
-        db.prepare("UPDATE journal_entries SET status = 'migrated', migrated_to = ?, updated_at = ? WHERE id = ?")
-          .run(newId, now, entryId);
-        migrated++;
-      }
-      return { ok: true, data: { migrated } };
-    }
+		// POST /api/journal/migrate
+		if (
+			action.method === "POST" &&
+			action.path.includes("/migrate") &&
+			action.body
+		) {
+			const { entryIds, targetDate } = action.body as any;
+			if (!entryIds?.length || !targetDate)
+				return { ok: false, error: "Missing entryIds or targetDate" };
+			const now = new Date().toISOString();
+			let migrated = 0;
+			for (const entryId of entryIds) {
+				const entry = db
+					.prepare("SELECT * FROM journal_entries WHERE id = ?")
+					.get(entryId) as any;
+				if (!entry) continue;
+				const maxOrder = db
+					.prepare(
+						"SELECT MAX(sort_order) as max FROM journal_entries WHERE date = ?",
+					)
+					.get(targetDate) as { max: number | null };
+				const newId = uniqueId("je");
+				db.prepare(
+					`INSERT INTO journal_entries (id, date, signifier, text, status, migrated_from, tags, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`,
+				).run(
+					newId,
+					targetDate,
+					entry.signifier,
+					entry.text,
+					entryId,
+					entry.tags || "[]",
+					(maxOrder?.max ?? -1) + 1,
+					now,
+					now,
+				);
+				db.prepare(
+					"UPDATE journal_entries SET status = 'migrated', migrated_to = ?, updated_at = ? WHERE id = ?",
+				).run(newId, now, entryId);
+				migrated++;
+			}
+			return { ok: true, data: { migrated } };
+		}
 
-    // POST /api/collections
-    if (action.method === "POST" && action.path === "/api/collections" && action.body) {
-      const { title, icon } = action.body as any;
-      if (!title) return { ok: false, error: "Missing title" };
-      const id = uniqueId("col");
-      db.prepare("INSERT INTO collections (id, title, icon) VALUES (?, ?, ?)").run(id, title, icon || null);
-      return { ok: true, data: { id, title, icon } };
-    }
+		// POST /api/collections
+		if (
+			action.method === "POST" &&
+			action.path === "/api/collections" &&
+			action.body
+		) {
+			const { title, icon } = action.body as any;
+			if (!title) return { ok: false, error: "Missing title" };
+			const id = uniqueId("col");
+			db.prepare(
+				"INSERT INTO collections (id, title, icon) VALUES (?, ?, ?)",
+			).run(id, title, icon || null);
+			return { ok: true, data: { id, title, icon } };
+		}
 
-    // POST /api/future-log
-    if (action.method === "POST" && action.path.includes("/future-log") && action.body) {
-      const { target_month, signifier, text } = action.body as any;
-      if (!target_month || !signifier || !text) return { ok: false, error: "Missing fields" };
-      const id = uniqueId("fl");
-      db.prepare("INSERT INTO future_log (id, target_month, signifier, text) VALUES (?, ?, ?, ?)")
-        .run(id, target_month, signifier, text);
-      return { ok: true, data: { id, target_month, signifier, text } };
-    }
+		// POST /api/future-log
+		if (
+			action.method === "POST" &&
+			action.path.includes("/future-log") &&
+			action.body
+		) {
+			const { target_month, signifier, text } = action.body as any;
+			if (!target_month || !signifier || !text)
+				return { ok: false, error: "Missing fields" };
+			const id = uniqueId("fl");
+			db.prepare(
+				"INSERT INTO future_log (id, target_month, signifier, text) VALUES (?, ?, ?, ?)",
+			).run(id, target_month, signifier, text);
+			return { ok: true, data: { id, target_month, signifier, text } };
+		}
 
-    // POST /api/journal/calendar — Create calendar event (via shared calendar module)
-    if (action.method === "POST" && action.path.includes("/calendar") && action.body) {
-      const body = action.body as any;
-      const result = await createCalendarEvent({
-        summary: body.summary || "",
-        date: body.date,
-        startTime: body.startTime,
-        endTime: body.endTime,
-        allDay: body.allDay,
-        calendar: body.calendar,
-        location: body.location,
-        description: body.description,
-      });
+		// POST /api/journal/calendar — Create calendar event (via shared calendar module)
+		if (
+			action.method === "POST" &&
+			action.path.includes("/calendar") &&
+			action.body
+		) {
+			const body = action.body as any;
+			const result = await createCalendarEvent({
+				summary: body.summary || "",
+				date: body.date,
+				startTime: body.startTime,
+				endTime: body.endTime,
+				allDay: body.allDay,
+				calendar: body.calendar,
+				location: body.location,
+				description: body.description,
+			});
 
-      if (!result.ok) {
-        // If calendar is disabled, return gracefully without failing the whole command
-        if (result.disabled) {
-          return { ok: true, data: { skipped: true, reason: "Calendar integration disabled" } };
-        }
-        // For other errors, return error but don't crash
-        console.error("[Calendar] Failed to create event:", result.error);
-        return { ok: false, error: `Calendar creation failed: ${result.error}` };
-      }
+			if (!result.ok) {
+				// If calendar is disabled, return gracefully without failing the whole command
+				if (result.disabled) {
+					return {
+						ok: true,
+						data: { skipped: true, reason: "Calendar integration disabled" },
+					};
+				}
+				// For other errors, return error but don't crash
+				console.error("[Calendar] Failed to create event:", result.error);
+				return {
+					ok: false,
+					error: `Calendar creation failed: ${result.error}`,
+				};
+			}
 
-      return { ok: true, data: result.data };
-    }
+			return { ok: true, data: result.data };
+		}
 
-    return { ok: false, error: `Unsupported action: ${action.method} ${action.path}` };
-  } catch (err) {
-    return { ok: false, error: String(err) };
-  }
+		return {
+			ok: false,
+			error: `Unsupported action: ${action.method} ${action.path}`,
+		};
+	} catch (err) {
+		return { ok: false, error: String(err) };
+	}
 }
 
-function executeGetLocally(action: LLMAction): { ok: boolean; data?: unknown; error?: string } {
-  try {
-    const db = getJournalDb();
+function executeGetLocally(action: LLMAction): {
+	ok: boolean;
+	data?: unknown;
+	error?: string;
+} {
+	try {
+		const db = getJournalDb();
 
-    // /api/journal?date=YYYY-MM-DD
-    if (action.path === "/api/journal" && action.query?.date) {
-      const entries = db
-        .prepare("SELECT * FROM journal_entries WHERE date = ? AND status = 'open' ORDER BY sort_order ASC")
-        .all(action.query.date);
-      return { ok: true, data: entries };
-    }
+		// /api/journal?date=YYYY-MM-DD
+		if (action.path === "/api/journal" && action.query?.date) {
+			const entries = db
+				.prepare(
+					"SELECT * FROM journal_entries WHERE date = ? AND status = 'open' ORDER BY sort_order ASC",
+				)
+				.all(action.query.date);
+			return { ok: true, data: entries };
+		}
 
-    // /api/journal/unresolved?month=YYYY-MM
-    if (action.path.includes("/unresolved") && action.query?.month) {
-      const entries = db
-        .prepare(
-          "SELECT * FROM journal_entries WHERE date LIKE ? AND (signifier = 'task' OR signifier = 'appointment') AND status = 'open' ORDER BY date ASC"
-        )
-        .all(`${action.query.month}%`);
-      return { ok: true, data: entries };
-    }
+		// /api/journal/unresolved?month=YYYY-MM
+		if (action.path.includes("/unresolved") && action.query?.month) {
+			const entries = db
+				.prepare(
+					"SELECT * FROM journal_entries WHERE date LIKE ? AND (signifier = 'task' OR signifier = 'appointment') AND status = 'open' ORDER BY date ASC",
+				)
+				.all(`${action.query.month}%`);
+			return { ok: true, data: entries };
+		}
 
-    // /api/collections
-    if (action.path === "/api/collections") {
-      const collections = getDb()
-        .prepare("SELECT * FROM collections ORDER BY created_at DESC")
-        .all();
-      return { ok: true, data: collections };
-    }
+		// /api/collections
+		if (action.path === "/api/collections") {
+			const collections = getDb()
+				.prepare("SELECT * FROM collections ORDER BY created_at DESC")
+				.all();
+			return { ok: true, data: collections };
+		}
 
-    return { ok: false, error: "Unsupported GET path" };
-  } catch (err) {
-    return { ok: false, error: String(err) };
-  }
+		return { ok: false, error: "Unsupported GET path" };
+	} catch (err) {
+		return { ok: false, error: String(err) };
+	}
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const body: CommandRequest = await req.json();
-    const { command, context } = body;
+	try {
+		const body: CommandRequest = await req.json();
+		const { command, context } = body;
 
-    if (!command?.trim()) {
-      return NextResponse.json(
-        { ok: false, message: "No command provided", actions: [] },
-        { status: 400 }
-      );
-    }
+		if (!command?.trim()) {
+			return NextResponse.json(
+				{ ok: false, message: "No command provided", actions: [] },
+				{ status: 400 },
+			);
+		}
 
-    // Call Ollama to interpret the command
-    const userPrompt = buildUserPrompt(command, context);
-    let llmResult: LLMResponse;
+		// Call Ollama to interpret the command
+		const userPrompt = buildUserPrompt(command, context);
+		let llmResult: LLMResponse;
 
-    try {
-      llmResult = await callOllama(SYSTEM_PROMPT, userPrompt);
-    } catch (err) {
-      console.error("LLM interpretation failed:", err);
-      // Fallback: try to parse as a simple task entry
-      return NextResponse.json({
-        ok: false,
-        message: "Command interpreter unavailable. Try adding entries directly.",
-        actions: [],
-      }, { status: 503 });
-    }
+		try {
+			llmResult = await callOllama(SYSTEM_PROMPT, userPrompt);
+		} catch (err) {
+			console.error("LLM interpretation failed:", err);
+			// Fallback: try to parse as a simple task entry
+			return NextResponse.json(
+				{
+					ok: false,
+					message:
+						"Command interpreter unavailable. Try adding entries directly.",
+					actions: [],
+				},
+				{ status: 503 },
+			);
+		}
 
-    if (llmResult.actions.length === 0) {
-      return NextResponse.json({
-        ok: true,
-        message: llmResult.message,
-        actions: [],
-      });
-    }
+		if (llmResult.actions.length === 0) {
+			return NextResponse.json({
+				ok: true,
+				message: llmResult.message,
+				actions: [],
+			});
+		}
 
-    // Execute each action in sequence, resolving parent_ref chains
-    const results: Array<{ action: LLMAction; result: { ok: boolean; data?: unknown; error?: string } }> = [];
-    const resultIds: (string | null)[] = [];
-    let allOk = true;
+		// Execute each action in sequence, resolving parent_ref chains
+		const results: Array<{
+			action: LLMAction;
+			result: { ok: boolean; data?: unknown; error?: string };
+		}> = [];
+		const resultIds: (string | null)[] = [];
+		let allOk = true;
 
-    for (const action of llmResult.actions) {
-      // Resolve parent_ref to actual parent_id
-      if (action.parent_ref !== undefined && action.parent_ref !== null && action.body) {
-        const parentId = resultIds[action.parent_ref];
-        if (parentId) {
-          action.body.parent_id = parentId;
-        }
-      }
+		for (const action of llmResult.actions) {
+			// Resolve parent_ref to actual parent_id
+			if (
+				action.parent_ref !== undefined &&
+				action.parent_ref !== null &&
+				action.body
+			) {
+				const parentId = resultIds[action.parent_ref];
+				if (parentId) {
+					action.body.parent_id = parentId;
+				}
+			}
 
-      const result = await executeAction(action);
-      results.push({ action, result });
+			const result = await executeAction(action);
+			results.push({ action, result });
 
-      // Capture created id for parent_ref resolution
-      const createdId = (result.data as { id?: string })?.id ?? null;
-      resultIds.push(createdId);
+			// Capture created id for parent_ref resolution
+			const createdId = (result.data as { id?: string })?.id ?? null;
+			resultIds.push(createdId);
 
-      if (!result.ok) {
-        allOk = false;
-        break;
-      }
-    }
+			if (!result.ok) {
+				allOk = false;
+				break;
+			}
+		}
 
-    return NextResponse.json({
-      ok: allOk,
-      message: allOk ? llmResult.message : `Failed: ${results[results.length - 1]?.result.error || "Unknown error"}`,
-      actions: results.map((r) => ({
-        method: r.action.method,
-        path: r.action.path,
-        success: r.result.ok,
-      })),
-    });
-  } catch (error) {
-    console.error("Command execution error:", error);
-    return NextResponse.json(
-      { ok: false, message: "Command failed to execute", actions: [] },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json({
+			ok: allOk,
+			message: allOk
+				? llmResult.message
+				: `Failed: ${results[results.length - 1]?.result.error || "Unknown error"}`,
+			actions: results.map((r) => ({
+				method: r.action.method,
+				path: r.action.path,
+				success: r.result.ok,
+			})),
+		});
+	} catch (error) {
+		console.error("Command execution error:", error);
+		return NextResponse.json(
+			{ ok: false, message: "Command failed to execute", actions: [] },
+			{ status: 500 },
+		);
+	}
 }

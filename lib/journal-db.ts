@@ -1,6 +1,6 @@
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import Database from "@/lib/sqlite";
-import { existsSync, mkdirSync, copyFileSync } from "fs";
-import { join, dirname } from "path";
 
 // Read from environment variables with fallback
 const JOURNAL_DB_PATH = process.env.JOURNAL_DB_PATH || "./gutter-journal.db";
@@ -10,64 +10,65 @@ const JOURNAL_DB_DIR = dirname(JOURNAL_DB_PATH);
 // Use globalThis to survive Next.js dev mode hot reloads
 // Without this, each hot reload creates a new connection and orphans the old WAL
 const globalForDb = globalThis as typeof globalThis & {
-  _journalDb?: Database | null;
+	_journalDb?: Database | null;
 };
 
 let _journalDb: Database | null = globalForDb._journalDb || null;
 
 function ensureDirs() {
-  if (!existsSync(JOURNAL_DB_DIR)) {
-    mkdirSync(JOURNAL_DB_DIR, { recursive: true });
-  }
-  if (!existsSync(BACKUP_DIR)) {
-    mkdirSync(BACKUP_DIR, { recursive: true });
-  }
+	if (!existsSync(JOURNAL_DB_DIR)) {
+		mkdirSync(JOURNAL_DB_DIR, { recursive: true });
+	}
+	if (!existsSync(BACKUP_DIR)) {
+		mkdirSync(BACKUP_DIR, { recursive: true });
+	}
 }
 
 function backupDatabase() {
-  if (!existsSync(JOURNAL_DB_PATH)) return;
-  
-  const timestamp = new Date().toISOString().replace(/:/g, "-").split(".")[0];
-  const backupPath = join(BACKUP_DIR, `journal-${timestamp}.db`);
-  
-  try {
-    copyFileSync(JOURNAL_DB_PATH, backupPath);
-    
-    // Keep only last 7 daily backups
-    const fs = require("fs");
-    const backups = fs.readdirSync(BACKUP_DIR)
-      .filter((f: string) => f.startsWith("journal-"))
-      .sort()
-      .reverse();
-    
-    if (backups.length > 7) {
-      backups.slice(7).forEach((f: string) => {
-        fs.unlinkSync(join(BACKUP_DIR, f));
-      });
-    }
-  } catch (err) {
-    console.error("Backup failed:", err);
-  }
+	if (!existsSync(JOURNAL_DB_PATH)) return;
+
+	const timestamp = new Date().toISOString().replace(/:/g, "-").split(".")[0];
+	const backupPath = join(BACKUP_DIR, `journal-${timestamp}.db`);
+
+	try {
+		copyFileSync(JOURNAL_DB_PATH, backupPath);
+
+		// Keep only last 7 daily backups
+		const fs = require("node:fs");
+		const backups = fs
+			.readdirSync(BACKUP_DIR)
+			.filter((f: string) => f.startsWith("journal-"))
+			.sort()
+			.reverse();
+
+		if (backups.length > 7) {
+			backups.slice(7).forEach((f: string) => {
+				fs.unlinkSync(join(BACKUP_DIR, f));
+			});
+		}
+	} catch (err) {
+		console.error("Backup failed:", err);
+	}
 }
 
 export function getJournalDb(): Database {
-  if (!_journalDb) {
-    ensureDirs();
-    
-    const isNew = !existsSync(JOURNAL_DB_PATH);
-    _journalDb = new Database(JOURNAL_DB_PATH);
-    
-    // WAL mode for better concurrency and crash resistance
-    _journalDb.pragma("journal_mode = WAL");
-    _journalDb.pragma("synchronous = NORMAL");
-    _journalDb.pragma("cache_size = 10000");
-    
-    // Checkpoint WAL on connection to ensure data is flushed to main DB
-    // This prevents data loss when Next.js dev mode hot-reloads modules
-    _journalDb.pragma("wal_checkpoint(TRUNCATE)");
-    
-    // Create tables
-    _journalDb.exec(`
+	if (!_journalDb) {
+		ensureDirs();
+
+		const _isNew = !existsSync(JOURNAL_DB_PATH);
+		_journalDb = new Database(JOURNAL_DB_PATH);
+
+		// WAL mode for better concurrency and crash resistance
+		_journalDb.pragma("journal_mode = WAL");
+		_journalDb.pragma("synchronous = NORMAL");
+		_journalDb.pragma("cache_size = 10000");
+
+		// Checkpoint WAL on connection to ensure data is flushed to main DB
+		// This prevents data loss when Next.js dev mode hot-reloads modules
+		_journalDb.pragma("wal_checkpoint(TRUNCATE)");
+
+		// Create tables
+		_journalDb.exec(`
       CREATE TABLE IF NOT EXISTS journal_entries (
         id TEXT PRIMARY KEY,
         date TEXT NOT NULL,
@@ -147,35 +148,54 @@ export function getJournalDb(): Database {
       INSERT OR IGNORE INTO _meta (key, value) VALUES ('schema_version', '1');
       INSERT OR IGNORE INTO _meta (key, value) VALUES ('created_at', datetime('now'));
     `);
-    
-    // Migrations
-    const schemaVersion = (_journalDb.prepare("SELECT value FROM _meta WHERE key = 'schema_version'").get() as { value: string })?.value || "1";
-    if (parseInt(schemaVersion) < 2) {
-      // Add parent_id column for subtasks
-      const columns = _journalDb.prepare("PRAGMA table_info(journal_entries)").all() as Array<{ name: string }>;
-      if (!columns.some((c) => c.name === "parent_id")) {
-        _journalDb.exec("ALTER TABLE journal_entries ADD COLUMN parent_id TEXT REFERENCES journal_entries(id)");
-      }
-      _journalDb.prepare("INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', '2')").run();
-    }
 
-    // Backup on first connection of the day
-    const lastBackup = _journalDb.prepare("SELECT value FROM _meta WHERE key = 'last_backup'").get() as { value: string } | undefined;
-    const today = new Date().toISOString().split("T")[0];
-    
-    if (!lastBackup || !lastBackup.value.startsWith(today)) {
-      backupDatabase();
-      _journalDb.prepare("INSERT OR REPLACE INTO _meta (key, value) VALUES ('last_backup', ?)").run(new Date().toISOString());
-    }
-    
-    // Persist to globalThis so hot reloads reuse the same connection
-    globalForDb._journalDb = _journalDb;
-  }
-  
-  return _journalDb;
+		// Migrations
+		const schemaVersion =
+			(
+				_journalDb
+					.prepare("SELECT value FROM _meta WHERE key = 'schema_version'")
+					.get() as { value: string }
+			)?.value || "1";
+		if (parseInt(schemaVersion, 10) < 2) {
+			// Add parent_id column for subtasks
+			const columns = _journalDb
+				.prepare("PRAGMA table_info(journal_entries)")
+				.all() as Array<{ name: string }>;
+			if (!columns.some((c) => c.name === "parent_id")) {
+				_journalDb.exec(
+					"ALTER TABLE journal_entries ADD COLUMN parent_id TEXT REFERENCES journal_entries(id)",
+				);
+			}
+			_journalDb
+				.prepare(
+					"INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', '2')",
+				)
+				.run();
+		}
+
+		// Backup on first connection of the day
+		const lastBackup = _journalDb
+			.prepare("SELECT value FROM _meta WHERE key = 'last_backup'")
+			.get() as { value: string } | undefined;
+		const today = new Date().toISOString().split("T")[0];
+
+		if (!lastBackup || !lastBackup.value.startsWith(today)) {
+			backupDatabase();
+			_journalDb
+				.prepare(
+					"INSERT OR REPLACE INTO _meta (key, value) VALUES ('last_backup', ?)",
+				)
+				.run(new Date().toISOString());
+		}
+
+		// Persist to globalThis so hot reloads reuse the same connection
+		globalForDb._journalDb = _journalDb;
+	}
+
+	return _journalDb;
 }
 
 // Manual backup trigger (can be called from API or UI)
 export function triggerBackup() {
-  backupDatabase();
+	backupDatabase();
 }

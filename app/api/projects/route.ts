@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 
 export async function GET() {
-  const db = getDb();
+	const db = getDb();
 
-  const projects = db.prepare(`
+	const projects = db
+		.prepare(`
     SELECT
       project as name,
       COUNT(*) as total,
@@ -14,7 +15,8 @@ export async function GET() {
     FROM tasks
     GROUP BY project
     ORDER BY open DESC, last_activity DESC
-  `).all();
+  `)
+		.all();
 
-  return NextResponse.json(projects);
+	return NextResponse.json(projects);
 }

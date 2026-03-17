@@ -1,22 +1,32 @@
+/**
+ * Main database connection for Gutter app
+ * Manages SQLite database with all core tables
+ */
+
 import Database from "@/lib/sqlite";
 
 const DB_PATH = process.env.TASKS_DB_PATH || "./gutter.db";
 
 // Use globalThis to survive Next.js dev mode hot reloads
 const globalForDb = globalThis as typeof globalThis & {
-  _tasksDb?: Database | null;
+	_tasksDb?: Database | null;
 };
 
 let _db: Database | null = globalForDb._tasksDb || null;
 
+/**
+ * Get or create the main database connection
+ * Initializes all tables on first call
+ * @returns {Database} The database instance
+ */
 export function getDb(): Database {
-  if (!_db) {
-    _db = new Database(DB_PATH);
-    _db.pragma("journal_mode = WAL");
-    _db.pragma("wal_checkpoint(TRUNCATE)");
-    globalForDb._tasksDb = _db;
+	if (!_db) {
+		_db = new Database(DB_PATH);
+		_db.pragma("journal_mode = WAL");
+		_db.pragma("wal_checkpoint(TRUNCATE)");
+		globalForDb._tasksDb = _db;
 
-    _db.exec(`
+		_db.exec(`
       CREATE TABLE IF NOT EXISTS ideas (
         id TEXT PRIMARY KEY,
         text TEXT NOT NULL,
@@ -96,6 +106,6 @@ export function getDb(): Database {
       );
       CREATE INDEX IF NOT EXISTS idx_fl_month ON future_log(target_month);
     `);
-  }
-  return _db;
+	}
+	return _db;
 }
