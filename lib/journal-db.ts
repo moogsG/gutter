@@ -66,6 +66,9 @@ export function getJournalDb(): Database {
 		// Checkpoint WAL on connection to ensure data is flushed to main DB
 		// This prevents data loss when Next.js dev mode hot-reloads modules
 		_journalDb.pragma("wal_checkpoint(TRUNCATE)");
+		
+		// Enable foreign key constraints
+		_journalDb.pragma("foreign_keys = ON");
 
 		// Create tables
 		_journalDb.exec(`
@@ -77,7 +80,7 @@ export function getJournalDb(): Database {
         status TEXT NOT NULL DEFAULT 'open',
         migrated_to TEXT,
         migrated_from TEXT,
-        collection_id TEXT,
+        collection_id TEXT REFERENCES collections(id) ON DELETE SET NULL,
         tags TEXT DEFAULT '[]',
         sort_order INTEGER NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -89,6 +92,8 @@ export function getJournalDb(): Database {
       CREATE INDEX IF NOT EXISTS idx_je_signifier ON journal_entries(signifier);
       CREATE INDEX IF NOT EXISTS idx_je_collection ON journal_entries(collection_id);
       CREATE INDEX IF NOT EXISTS idx_je_parent ON journal_entries(parent_id);
+      CREATE INDEX IF NOT EXISTS idx_je_sort ON journal_entries(date, sort_order);
+      CREATE INDEX IF NOT EXISTS idx_je_updated ON journal_entries(updated_at);
       
       CREATE TABLE IF NOT EXISTS collections (
         id TEXT PRIMARY KEY,
@@ -138,6 +143,9 @@ export function getJournalDb(): Database {
       );
 
       CREATE UNIQUE INDEX IF NOT EXISTS idx_meeting_prep_event ON meeting_prep(event_id, occurrence_date);
+      CREATE INDEX IF NOT EXISTS idx_meeting_prep_status ON meeting_prep(prep_status);
+      CREATE INDEX IF NOT EXISTS idx_meeting_prep_date ON meeting_prep(occurrence_date);
+      CREATE INDEX IF NOT EXISTS idx_fl_migrated ON future_log(migrated);
       
       -- Metadata table to track schema version and backups
       CREATE TABLE IF NOT EXISTS _meta (

@@ -24,6 +24,9 @@ export function getDb(): Database {
 		_db = new Database(DB_PATH);
 		_db.pragma("journal_mode = WAL");
 		_db.pragma("wal_checkpoint(TRUNCATE)");
+		
+		// Enable foreign key constraints
+		_db.pragma("foreign_keys = ON");
 		globalForDb._tasksDb = _db;
 
 		_db.exec(`
@@ -69,6 +72,11 @@ export function getDb(): Database {
         updated_at TEXT NOT NULL
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_meeting_prep_event_date ON meeting_prep(event_id, occurrence_date);
+      CREATE INDEX IF NOT EXISTS idx_meeting_prep_status ON meeting_prep(prep_status);
+      CREATE INDEX IF NOT EXISTS idx_meeting_prep_date ON meeting_prep(occurrence_date);
+      CREATE INDEX IF NOT EXISTS idx_chat_sender ON chat_messages(sender);
+      CREATE INDEX IF NOT EXISTS idx_chat_timestamp ON chat_messages(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_notes_timestamp ON notes(timestamp);
       
       CREATE TABLE IF NOT EXISTS journal_entries (
         id TEXT PRIMARY KEY,
@@ -78,7 +86,7 @@ export function getDb(): Database {
         status TEXT NOT NULL DEFAULT 'open',
         migrated_to TEXT,
         migrated_from TEXT,
-        collection_id TEXT,
+        collection_id TEXT REFERENCES collections(id) ON DELETE SET NULL,
         tags TEXT DEFAULT '[]',
         sort_order INTEGER NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -88,6 +96,7 @@ export function getDb(): Database {
       CREATE INDEX IF NOT EXISTS idx_je_status ON journal_entries(status);
       CREATE INDEX IF NOT EXISTS idx_je_signifier ON journal_entries(signifier);
       CREATE INDEX IF NOT EXISTS idx_je_collection ON journal_entries(collection_id);
+      CREATE INDEX IF NOT EXISTS idx_je_sort ON journal_entries(date, sort_order);
       
       CREATE TABLE IF NOT EXISTS collections (
         id TEXT PRIMARY KEY,
