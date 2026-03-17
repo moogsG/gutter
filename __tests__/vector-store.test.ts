@@ -7,28 +7,24 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ─── Hoist mocks so vi.mock factories can access them ────────────────────────
+// ─── Mock objects ─────────────────────────────────────────────────────────────
 
-const { mockSearch, mockTable, mockDb } = vi.hoisted(() => {
-  const mockSearch = {
-    limit: vi.fn().mockReturnThis(),
-    toArray: vi.fn().mockResolvedValue([]),
-  };
+const mockSearch = {
+  limit: vi.fn().mockReturnThis(),
+  toArray: vi.fn().mockResolvedValue([]),
+};
 
-  const mockTable = {
-    search: vi.fn().mockReturnValue(mockSearch),
-    add: vi.fn().mockResolvedValue(undefined),
-    delete: vi.fn().mockResolvedValue(undefined),
-  };
+const mockTable = {
+  search: vi.fn().mockReturnValue(mockSearch),
+  add: vi.fn().mockResolvedValue(undefined),
+  delete: vi.fn().mockResolvedValue(undefined),
+};
 
-  const mockDb = {
-    tableNames: vi.fn().mockResolvedValue(["journal_entries", "meeting_transcripts"]),
-    openTable: vi.fn().mockResolvedValue(mockTable),
-    createTable: vi.fn().mockResolvedValue(mockTable),
-  };
-
-  return { mockSearch, mockTable, mockDb };
-});
+const mockDb = {
+  tableNames: vi.fn().mockResolvedValue(["journal_entries", "meeting_transcripts"]),
+  openTable: vi.fn().mockResolvedValue(mockTable),
+  createTable: vi.fn().mockResolvedValue(mockTable),
+};
 
 // ─── Mock LanceDB ─────────────────────────────────────────────────────────────
 
