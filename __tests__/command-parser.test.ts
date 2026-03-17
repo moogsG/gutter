@@ -192,7 +192,7 @@ describe("Command Parser", () => {
       };
 
       expect(expectedAction.body.allDay).toBe(true);
-      expect(expectedAction.body.startTime).toBeUndefined();
+      expect((expectedAction.body as Record<string, unknown>).startTime).toBeUndefined();
     });
   });
 

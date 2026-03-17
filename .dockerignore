@@ -1,0 +1,62 @@
+# Dependencies
+node_modules
+bun.lockb
+
+# Build output
+.next
+out
+
+# Git
+.git
+.gitignore
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+*.db.bak*
+
+# Backups
+backups/
+
+# LanceDB
+gutter-lancedb/
+
+# Logs
+*.log
+gutter-error.log
+gutter.log
+security.log
+
+# Testing
+coverage
+.vitest
+__tests__
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Documentation (keep for reference, but exclude from build)
+# docs/
+# README.md
+# ARCHITECTURE.md
+
+# Misc
+*.pid
+*.seed
+*.pid.lock
+.temp
+tmp/

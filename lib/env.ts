@@ -53,7 +53,7 @@ export const env = {
 	host: optional("HOST", "localhost"),
 
 	// Auth
-	authPassword: required("AUTH_PASSWORD"),
+	authPasswordHash: optional("AUTH_PASSWORD_HASH", ""),
 	authSecret: optional("AUTH_SECRET", "gutter-default-secret-change-me"),
 	sessionMaxAge: optionalInt("SESSION_MAX_AGE_DAYS", 30),
 

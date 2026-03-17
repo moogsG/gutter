@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  gutter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gutter
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Auth
+      - AUTH_PASSWORD=${AUTH_PASSWORD}
+      - AUTH_SECRET=${AUTH_SECRET}
+      
+      # Database paths (use Docker volumes)
+      - DATABASE_PATH=/app/data/gutter.db
+      - JOURNAL_DB_PATH=/app/data/gutter-journal.db
+      - TASKS_DB_PATH=/app/data/gutter.db
+      
+      # Ollama (connect to ollama service)
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3:latest}
+      - JOURNAL_COMMAND_MODEL=${JOURNAL_COMMAND_MODEL:-qwen3:latest}
+      
+      # Calendar (optional, macOS-specific features disabled in Docker)
+      - CALENDAR_ENABLED=false
+      
+      # Jira
+      - JIRA_URL=${JIRA_URL}
+      - JIRA_EMAIL=${JIRA_EMAIL}
+      - JIRA_API_TOKEN=${JIRA_API_TOKEN}
+      - JIRA_PROJECTS=${JIRA_PROJECTS}
+      
+      # Slack
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - SLACK_CHANNELS=${SLACK_CHANNELS}
+      
+      # Misc
+      - PORT=3000
+      - NODE_ENV=production
+      - DEFAULT_THEME=${DEFAULT_THEME:-cyberpink}
+      - SESSION_MAX_AGE_DAYS=${SESSION_MAX_AGE_DAYS:-30}
+    volumes:
+      # Database storage
+      - ./data:/app/data
+      # Backups
+      - ./backups:/app/backups
+    depends_on:
+      - ollama
+    networks:
+      - gutter-network
+    healthcheck:
+      test: ["CMD", "bun", "--eval", "fetch('http://localhost:3000').then(() => process.exit(0)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: gutter-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      # Persist Ollama models
+      - ollama-models:/root/.ollama
+    networks:
+      - gutter-network
+    # GPU passthrough for NVIDIA GPUs (optional)
+    # Uncomment the following if you have an NVIDIA GPU
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+networks:
+  gutter-network:
+    driver: bridge
+
+volumes:
+  ollama-models:
+    driver: local

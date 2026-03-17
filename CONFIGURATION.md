@@ -249,6 +249,36 @@ curl -L https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.b
 
 ---
 
+## NODE_ENV
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NODE_ENV` | `development` | Runtime environment mode |
+
+**Valid values:**
+- `development` — Dev mode with hot reloading, verbose logging
+- `production` — Production mode with optimizations, minimal logging
+- `test` — Testing mode (used by vitest)
+
+**Example:**
+```env
+NODE_ENV=production
+```
+
+**Notes:**
+- Set to `production` for deployed environments (VPS, Docker, etc.)
+- Affects Next.js behavior, logging verbosity, and error display
+- In production mode:
+  - Errors show generic messages (no stack traces to users)
+  - Static assets are optimized and cached
+  - React runs in production mode (faster, smaller bundles)
+- In development mode:
+  - Detailed error messages and stack traces
+  - Hot module reloading
+  - Source maps enabled
+
+---
+
 ## Example: Complete Configuration
 
 ```env
