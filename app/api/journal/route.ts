@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getJournalDb } from "@/lib/journal-db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { logValidationFailure } from "@/lib/security-logger";
 import { validateJournalEntry } from "@/lib/validation";
 import { upsertJournalEntry } from "@/lib/vector-store";
 import type { JournalEntry, NewEntry } from "@/types/journal";
@@ -104,6 +105,9 @@ export async function POST(req: NextRequest) {
 		// Validate and sanitize entry content
 		const validation = validateJournalEntry({ content: text, tags });
 		if (!validation.valid) {
+			await logValidationFailure(req, "/api/journal", {
+				errors: validation.errors,
+			});
 			return NextResponse.json(
 				{ error: "Validation failed", details: validation.errors },
 				{ status: 400 },
