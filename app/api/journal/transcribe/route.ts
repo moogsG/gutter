@@ -3,6 +3,7 @@ import { existsSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type NextRequest, NextResponse } from "next/server";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 const WHISPER_MODEL = join(
 	process.env.HOME || "/Users/moogs",
@@ -10,6 +11,13 @@ const WHISPER_MODEL = join(
 );
 
 export async function POST(req: NextRequest) {
+	// Rate limit: 10 requests per minute (CPU-intensive transcription)
+	const limited = rateLimitMiddleware(req, {
+		windowMs: 60000,
+		maxRequests: 10,
+	});
+	if (limited) return limited;
+
 	const tempFiles: string[] = [];
 
 	try {

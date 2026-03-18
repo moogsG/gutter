@@ -1,8 +1,10 @@
 import { exec } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { readFile, unlink } from "node:fs/promises";
+import type { NextRequest } from "next/server";
 import { promisify } from "node:util";
 import { getDb } from "@/lib/db";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 const execAsync = promisify(exec);
 
@@ -15,7 +17,14 @@ function formatDate(date: Date): string {
 }
 
 // GET: Fetch upcoming meetings, join with DB prep data
-export async function GET() {
+export async function GET(req: NextRequest) {
+	// Rate limit: 20 requests per minute (expensive calendar + DB operation)
+	const limited = rateLimitMiddleware(req, {
+		windowMs: 60000,
+		maxRequests: 20,
+	});
+	if (limited) return limited;
+
 	try {
 		const now = new Date();
 		const futureDate = new Date();

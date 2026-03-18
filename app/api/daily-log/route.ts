@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 interface LogRow {
 	id: string;
@@ -12,7 +13,14 @@ interface LogRow {
 	type: string;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+	// Rate limit: 50 requests per minute (read operation)
+	const limited = rateLimitMiddleware(req, {
+		windowMs: 60000,
+		maxRequests: 50,
+	});
+	if (limited) return limited;
+
 	const db = getDb();
 	const today = new Date().toISOString().split("T")[0];
 
@@ -48,6 +56,13 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+	// Rate limit: 30 requests per minute (write operation)
+	const limited = rateLimitMiddleware(req, {
+		windowMs: 60000,
+		maxRequests: 30,
+	});
+	if (limited) return limited;
+
 	const { text, type = "note" } = await req.json();
 
 	if (!text || !text.trim()) {

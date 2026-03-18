@@ -1,7 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { JIRA_ENABLED, updateIssueStatus } from "@/lib/jira";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
+	// Rate limit: 10 requests per minute (external API write operation)
+	const limited = rateLimitMiddleware(request, {
+		windowMs: 60000,
+		maxRequests: 10,
+	});
+	if (limited) return limited;
+
 	try {
 		if (!JIRA_ENABLED) {
 			return NextResponse.json(

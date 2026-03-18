@@ -1,8 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import type { Collection } from "@/types/journal";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+	// Rate limit: 50 requests per minute (read operation)
+	const limited = rateLimitMiddleware(req, {
+		windowMs: 60000,
+		maxRequests: 50,
+	});
+	if (limited) return limited;
+
 	try {
 		const db = getDb();
 		const collections = db
@@ -25,6 +33,13 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+	// Rate limit: 20 requests per minute (write operation)
+	const limited = rateLimitMiddleware(req, {
+		windowMs: 60000,
+		maxRequests: 20,
+	});
+	if (limited) return limited;
+
 	try {
 		const { title, icon } = await req.json();
 

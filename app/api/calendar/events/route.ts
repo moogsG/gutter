@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
 import { type NextRequest, NextResponse } from "next/server";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 interface CalendarEvent {
 	id: string;
@@ -28,6 +29,13 @@ const CALENDARS_TO_FETCH = getCalendarNames().map((name, i) => ({
 }));
 
 export async function GET(req: NextRequest) {
+	// Rate limit: 30 requests per minute (calendar fetch)
+	const limited = rateLimitMiddleware(req, {
+		windowMs: 60000,
+		maxRequests: 30,
+	});
+	if (limited) return limited;
+
 	const from = req.nextUrl.searchParams.get("from");
 	const to = req.nextUrl.searchParams.get("to");
 

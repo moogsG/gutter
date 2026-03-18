@@ -1,7 +1,15 @@
 import { getDb } from "@/lib/db";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 // POST: Update prep data for a meeting (called by Jynx after processing)
 export async function POST(request: Request) {
+	// Rate limit: 20 requests per minute (write operation)
+	const limited = rateLimitMiddleware(request, {
+		windowMs: 60000,
+		maxRequests: 20,
+	});
+	if (limited) return limited;
+
 	try {
 		const { eventId, occurrenceDate, prepNotes, summary, actionItems } =
 			await request.json();

@@ -1,7 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getJournalDb } from "@/lib/journal-db";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
+	// Rate limit: 20 requests per minute (write operation)
+	const limited = rateLimitMiddleware(req, {
+		windowMs: 60000,
+		maxRequests: 20,
+	});
+	if (limited) return limited;
+
 	try {
 		const { entryIds, targetDate } = await req.json();
 
