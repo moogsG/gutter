@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { describe, expect, test, beforeEach, afterEach } from "vitest";
 import { generateCompletion, getLLMInfo } from "@/lib/llm-router";
 
 // Mock fetch globally
