@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
-import { generateMeetingPrep } from "@/lib/ollama-prep";
+import { generateMeetingPrep } from "@/lib/meeting-prep";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 // POST: Request prep for a meeting — generates via Ollama with tool calling
