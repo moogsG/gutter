@@ -187,8 +187,8 @@ describe("rateLimitMiddleware()", () => {
 		expect(body?.retryAfter).toBeGreaterThan(0);
 	});
 
-	it("uses getClientIp to identify requests", () => {
-		const { getClientIp } = require("@/lib/security-logger");
+	it("uses getClientIp to identify requests", async () => {
+		const { getClientIp } = await import("../security-logger");
 
 		const req = new Request("http://localhost/api/test?test-ip=10.0.0.1");
 		rateLimitMiddleware(req, { windowMs: 60000, maxRequests: 10 });
@@ -197,7 +197,7 @@ describe("rateLimitMiddleware()", () => {
 	});
 
 	it("logs rate limit exceeded events", async () => {
-		const { logRateLimitExceeded } = require("@/lib/security-logger");
+		const { logRateLimitExceeded } = await import("../security-logger");
 		const config = { windowMs: 60000, maxRequests: 1 };
 
 		const req1 = new Request("http://localhost/api/test?test-ip=192.168.1.5");
