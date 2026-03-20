@@ -85,6 +85,16 @@ export async function executeWithRetry(
 	throw new Error("Retry logic failed unexpectedly");
 }
 
+export interface CalendarEvent {
+	id: string;
+	summary: string;
+	startDate: string; // ISO string
+	endDate: string;
+	allDay: boolean;
+	calendar: string;
+	location?: string;
+}
+
 export interface CalendarEventParams {
 	summary: string;
 	date: string; // YYYY-MM-DD
@@ -94,6 +104,88 @@ export interface CalendarEventParams {
 	calendar?: string;
 	location?: string;
 	description?: string;
+}
+
+// Event cache
+let eventCache: {
+	data: CalendarEvent[];
+	timestamp: number;
+	key: string;
+} | null = null;
+
+const EVENT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Fetch calendar events for a date range from all configured calendars
+ */
+export async function fetchCalendarEvents(
+	from: string,
+	to: string,
+): Promise<{ ok: boolean; data?: CalendarEvent[]; error?: string }> {
+	if (!CALENDAR_ENABLED) {
+		return {
+			ok: false,
+			error: "Calendar integration disabled",
+		};
+	}
+
+	// Check cache
+	const cacheKey = `${from}-${to}`;
+	if (
+		eventCache &&
+		eventCache.key === cacheKey &&
+		Date.now() - eventCache.timestamp < EVENT_CACHE_TTL
+	) {
+		return { ok: true, data: eventCache.data };
+	}
+
+	try {
+		const { getCalendarNames } = await import("@/lib/calendars");
+		const calendarNames = getCalendarNames();
+		const allEvents: CalendarEvent[] = [];
+
+		// Fetch events from each calendar
+		for (let i = 0; i < calendarNames.length; i++) {
+			const calName = calendarNames[i];
+			try {
+				const cmd = `npx @joargp/accli events "${calName}" --from ${from}T00:00:00 --to ${to}T23:59:59 --json`;
+				const output = await executeWithRetry(cmd);
+				const parsed = JSON.parse(output.trim());
+				const events = parsed.events || parsed || [];
+
+				for (const e of events) {
+					allEvents.push({
+						id: e.id || `${e.title || e.summary}-${e.startDate || e.start}`,
+						summary: e.title || e.summary || "Untitled Event",
+						startDate: e.startDate || e.start || "",
+						endDate: e.endDate || e.end || "",
+						allDay: e.allDay || e.isAllDay || false,
+						calendar: calName,
+						location: e.location,
+					});
+				}
+			} catch (_calError) {
+				// Skip calendar on error
+			}
+		}
+
+		// Update cache
+		eventCache = {
+			data: allEvents,
+			timestamp: Date.now(),
+			key: cacheKey,
+		};
+
+		return { ok: true, data: allEvents };
+	} catch (error) {
+		// If we have stale cache, return that
+		if (eventCache && eventCache.key === cacheKey) {
+			return { ok: true, data: eventCache.data };
+		}
+
+		const errMsg = error instanceof Error ? error.message : String(error);
+		return { ok: false, error: errMsg };
+	}
 }
 
 export async function createCalendarEvent(
