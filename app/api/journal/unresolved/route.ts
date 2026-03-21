@@ -1,8 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getJournalDb } from "@/lib/journal-db";
 import type { JournalEntry } from "@/types/journal";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 export async function GET(req: NextRequest) {
+	// Rate limit: 50 requests per minute (read operation)
+	const limited = rateLimitMiddleware(req, {
+		windowMs: 60000,
+		maxRequests: 50,
+	});
+	if (limited) return limited;
+
 	const month = req.nextUrl.searchParams.get("month");
 
 	if (!month) {

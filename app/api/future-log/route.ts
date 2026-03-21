@@ -1,8 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import type { FutureLogEntry } from "@/types/journal";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 export async function GET(req: NextRequest) {
+	// Rate limit: 50 requests per minute (read operation)
+	const limited = rateLimitMiddleware(req, {
+		windowMs: 60000,
+		maxRequests: 50,
+	});
+	if (limited) return limited;
+
 	const month = req.nextUrl.searchParams.get("month");
 
 	try {
@@ -38,6 +46,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+	// Rate limit: 20 requests per minute (write operation)
+	const limited = rateLimitMiddleware(req, {
+		windowMs: 60000,
+		maxRequests: 20,
+	});
+	if (limited) return limited;
+
 	try {
 		const { target_month, signifier, text } = await req.json();
 

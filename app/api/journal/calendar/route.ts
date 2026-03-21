@@ -9,6 +9,7 @@ import {
 	RETRY_ATTEMPTS,
 	RETRY_DELAY_MS,
 } from "@/lib/calendar";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 interface CalendarEventRequest {
 	summary: string;
@@ -22,6 +23,13 @@ interface CalendarEventRequest {
 }
 
 export async function POST(req: NextRequest) {
+	// Rate limit: 10 requests per minute (calendar creation)
+	const limited = rateLimitMiddleware(req, {
+		windowMs: 60000,
+		maxRequests: 10,
+	});
+	if (limited) return limited;
+
 	try {
 		const body: CalendarEventRequest = await req.json();
 		const {

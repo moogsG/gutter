@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getJournalDb } from "@/lib/journal-db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { logValidationFailure } from "@/lib/security-logger";
 import { validateId } from "@/lib/validation";
 
 // Kanban status values map to journal_entries status values
@@ -83,6 +84,10 @@ export async function POST(req: NextRequest) {
 
 	const idValidation = validateId(taskId);
 	if (!idValidation.valid) {
+		await logValidationFailure(req, "/api/tasks", {
+			field: "taskId",
+			error: idValidation.error,
+		});
 		return NextResponse.json({ error: idValidation.error }, { status: 400 });
 	}
 

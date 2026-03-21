@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createCalendarEvent } from "@/lib/calendar";
 import { getDb } from "@/lib/db";
 import { getJournalDb } from "@/lib/journal-db";
+import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 function uniqueId(prefix: string): string {
 	return `${prefix}-${Date.now()}-${randomBytes(4).toString("hex")}`;
@@ -460,6 +461,13 @@ function executeGetLocally(action: LLMAction): {
 }
 
 export async function POST(req: NextRequest) {
+	// Rate limit: 30 requests per minute (LLM-backed operations)
+	const limited = rateLimitMiddleware(req, {
+		windowMs: 60000,
+		maxRequests: 30,
+	});
+	if (limited) return limited;
+
 	try {
 		const body: CommandRequest = await req.json();
 		const { command, context } = body;

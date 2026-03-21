@@ -30,6 +30,37 @@ Designed specifically for the way ADHD brains actually work. Low friction captur
 
 ---
 
+## why gutter?
+
+**Because context switching destroys productivity.**
+
+You're working on `GDEV-247` when Slack pings. Meeting in 5 minutes. You open Jira to find the ticket, open your notes to find the context from last week, check your calendar to see who's coming, scan the thread for background... 10 minutes later you're late and half-prepared.
+
+Gutter fixes this:
+- **Sequential logging** — One place for everything. Task, note, blocker, whatever. It all goes in the log with a signifier.
+- **AI meeting prep** — One click. Ollama pulls your Jira tickets, Slack context, and local notes, then generates prep notes.
+- **Natural language commands** — `meeting at 3pm with Ryan` creates the appointment. `done with GDEV-123` marks it complete. No forms, no clicking.
+- **Voice capture** — Driving? Walking? Hit the mic button, dump your thought, keep moving.
+- **Calendar integration** — Apple Calendar events show up in the monthly grid and day view. No switching apps.
+- **Jira triage** — See your backlog, create issues, mark done — all without leaving the log.
+- **Local-first** — Your data stays on your machine. Ollama runs locally. No cloud APIs harvesting your notes.
+
+**Built for ADHD:**
+- Fast capture — zero friction between thought and log entry
+- External structure — the system remembers what you'd forget
+- Visual signifiers — color-coded tasks, appointments, notes at a glance
+- Migration ritual — monthly review forces closure, not guilt
+- No overwhelm — one day at a time, one task at a time
+
+**For engineers who think in tickets:**
+- Jira integration that doesn't suck
+- Natural language commands that feel like CLI
+- Dark themes that don't burn your retinas at 2am
+- SQLite backend you can grep if you want
+- MIT license — fork it, break it, make it yours
+
+---
+
 ## quick start
 
 ```bash
