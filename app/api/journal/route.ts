@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
 		}
 
 		// Validate signifier (should be one of the allowed types)
-		const validSignifiers = ["•", "○", "×", "—", ">", "<", "*", "!", "?"];
+		const validSignifiers = ["task", "appointment", "note", "memory", "important"];
 		if (!validSignifiers.includes(signifier)) {
 			return NextResponse.json({ error: "Invalid signifier" }, { status: 400 });
 		}
