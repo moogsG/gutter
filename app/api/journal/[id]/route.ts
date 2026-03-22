@@ -1,4 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
+import {
+	handleApiError,
+	handleValidationError,
+} from "@/lib/api-error-handler";
 import { getJournalDb } from "@/lib/journal-db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { sanitizeText, validateId } from "@/lib/validation";
@@ -21,7 +25,7 @@ export async function PATCH(
 		// Validate ID
 		const idValidation = validateId(id);
 		if (!idValidation.valid) {
-			return NextResponse.json({ error: idValidation.error }, { status: 400 });
+			return handleValidationError(idValidation.error || "Invalid ID");
 		}
 
 		const body = await req.json();
@@ -38,10 +42,7 @@ export async function PATCH(
 				"migrated",
 			];
 			if (!allowedStatuses.includes(body.status)) {
-				return NextResponse.json(
-					{ error: "Invalid status value" },
-					{ status: 400 },
-				);
+				return handleValidationError("Invalid status value");
 			}
 		}
 
@@ -60,26 +61,17 @@ export async function PATCH(
 				"task",
 			];
 			if (!validSignifiers.includes(body.signifier)) {
-				return NextResponse.json(
-					{ error: "Invalid signifier" },
-					{ status: 400 },
-				);
+				return handleValidationError("Invalid signifier");
 			}
 		}
 
 		// Sanitize text if provided
 		if (body.text !== undefined) {
 			if (typeof body.text !== "string") {
-				return NextResponse.json(
-					{ error: "Text must be a string" },
-					{ status: 400 },
-				);
+				return handleValidationError("Text must be a string");
 			}
 			if (body.text.length > 50000) {
-				return NextResponse.json(
-					{ error: "Text exceeds maximum length" },
-					{ status: 400 },
-				);
+				return handleValidationError("Text exceeds maximum length");
 			}
 			body.text = sanitizeText(body.text);
 		}
@@ -158,11 +150,7 @@ export async function PATCH(
 
 		return NextResponse.json({ success: true });
 	} catch (error) {
-		console.error("Error updating journal entry:", error);
-		return NextResponse.json(
-			{ error: "Failed to update entry" },
-			{ status: 500 },
-		);
+		return handleApiError("update journal entry", error);
 	}
 }
 
@@ -183,7 +171,7 @@ export async function DELETE(
 		// Validate ID
 		const idValidation = validateId(id);
 		if (!idValidation.valid) {
-			return NextResponse.json({ error: idValidation.error }, { status: 400 });
+			return handleValidationError(idValidation.error || "Invalid ID");
 		}
 		const db = getJournalDb();
 		const hardDelete = req.nextUrl.searchParams.get("hard") === "true";
@@ -202,10 +190,6 @@ export async function DELETE(
 
 		return NextResponse.json({ success: true });
 	} catch (error) {
-		console.error("Error deleting journal entry:", error);
-		return NextResponse.json(
-			{ error: "Failed to delete entry" },
-			{ status: 500 },
-		);
+		return handleApiError("delete journal entry", error);
 	}
 }

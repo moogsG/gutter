@@ -1,4 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
+import {
+	handleApiError,
+	handleValidationError,
+} from "@/lib/api-error-handler";
 import { getJournalDb } from "@/lib/journal-db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { logValidationFailure } from "@/lib/security-logger";
@@ -71,15 +75,12 @@ export async function POST(req: NextRequest) {
 	// Validate action parameter
 	const validActions = ["complete", "move"];
 	if (!action || !validActions.includes(action)) {
-		return NextResponse.json(
-			{ error: "Invalid or missing action" },
-			{ status: 400 },
-		);
+		return handleValidationError("Invalid or missing action");
 	}
 
 	// Validate taskId
 	if (!taskId) {
-		return NextResponse.json({ error: "taskId is required" }, { status: 400 });
+		return handleValidationError("taskId is required");
 	}
 
 	const idValidation = validateId(taskId);
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
 			field: "taskId",
 			error: idValidation.error,
 		});
-		return NextResponse.json({ error: idValidation.error }, { status: 400 });
+		return handleValidationError(idValidation.error || "Invalid taskId");
 	}
 
 	if (action === "complete") {
@@ -101,15 +102,12 @@ export async function POST(req: NextRequest) {
 	if (action === "move") {
 		const { status } = body;
 		if (!status) {
-			return NextResponse.json(
-				{ error: "status is required for move action" },
-				{ status: 400 },
-			);
+			return handleValidationError("status is required for move action");
 		}
 
 		const allowedStatuses = ["open", "in-progress", "blocked", "done"];
 		if (!allowedStatuses.includes(status)) {
-			return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+			return handleValidationError("Invalid status");
 		}
 
 		db.prepare(
@@ -118,5 +116,5 @@ export async function POST(req: NextRequest) {
 		return NextResponse.json({ ok: true });
 	}
 
-	return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+	return handleValidationError("Invalid action");
 }

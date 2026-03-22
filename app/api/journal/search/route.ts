@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { handleApiError } from "@/lib/api-error-handler";
 import { getJournalDb } from "@/lib/journal-db";
 import type { JournalEntry } from "@/types/journal";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
@@ -40,10 +41,6 @@ export async function GET(req: NextRequest) {
 
 		return NextResponse.json(parsed);
 	} catch (error) {
-		console.error("Error searching journal entries:", error);
-		return NextResponse.json(
-			{ error: "Failed to search entries" },
-			{ status: 500 },
-		);
+		return handleApiError("search journal entries", error);
 	}
 }

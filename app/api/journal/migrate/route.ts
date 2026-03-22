@@ -1,4 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
+import {
+	handleApiError,
+	handleValidationError,
+} from "@/lib/api-error-handler";
 import { getJournalDb } from "@/lib/journal-db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
@@ -14,10 +18,7 @@ export async function POST(req: NextRequest) {
 		const { entryIds, targetDate } = await req.json();
 
 		if (!entryIds || !Array.isArray(entryIds) || !targetDate) {
-			return NextResponse.json(
-				{ error: "entryIds (array) and targetDate required" },
-				{ status: 400 },
-			);
+			return handleValidationError("entryIds (array) and targetDate required");
 		}
 
 		const db = getJournalDb();
@@ -68,10 +69,6 @@ export async function POST(req: NextRequest) {
 
 		return NextResponse.json({ success: true, count: entryIds.length });
 	} catch (error) {
-		console.error("Error migrating entries:", error);
-		return NextResponse.json(
-			{ error: "Failed to migrate entries" },
-			{ status: 500 },
-		);
+		return handleApiError("migrate entries", error);
 	}
 }
