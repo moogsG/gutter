@@ -1,4 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
+import {
+	handleApiError,
+	handleValidationError,
+} from "@/lib/api-error-handler";
 import { getJournalDb } from "@/lib/journal-db";
 import type { JournalEntry } from "@/types/journal";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
@@ -14,10 +18,7 @@ export async function GET(req: NextRequest) {
 	const month = req.nextUrl.searchParams.get("month");
 
 	if (!month) {
-		return NextResponse.json(
-			{ error: "Month required (YYYY-MM)" },
-			{ status: 400 },
-		);
+		return handleValidationError("Month required (YYYY-MM)");
 	}
 
 	try {
@@ -44,10 +45,6 @@ export async function GET(req: NextRequest) {
 
 		return NextResponse.json(parsed);
 	} catch (error) {
-		console.error("Error fetching unresolved entries:", error);
-		return NextResponse.json(
-			{ error: "Failed to fetch entries" },
-			{ status: 500 },
-		);
+		return handleApiError("fetch unresolved entries", error);
 	}
 }

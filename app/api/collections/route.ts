@@ -1,4 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
+import {
+	handleApiError,
+	handleValidationError,
+} from "@/lib/api-error-handler";
 import { getDb } from "@/lib/db";
 import type { Collection } from "@/types/journal";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
@@ -24,11 +28,7 @@ export async function GET(req: NextRequest) {
 
 		return NextResponse.json(collections);
 	} catch (error) {
-		console.error("Error fetching collections:", error);
-		return NextResponse.json(
-			{ error: "Failed to fetch collections" },
-			{ status: 500 },
-		);
+		return handleApiError("fetch collections", error);
 	}
 }
 
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 		const { title, icon } = await req.json();
 
 		if (!title) {
-			return NextResponse.json({ error: "Title required" }, { status: 400 });
+			return handleValidationError("Title required");
 		}
 
 		const db = getDb();
@@ -61,10 +61,6 @@ export async function POST(req: NextRequest) {
 
 		return NextResponse.json(collection);
 	} catch (error) {
-		console.error("Error creating collection:", error);
-		return NextResponse.json(
-			{ error: "Failed to create collection" },
-			{ status: 500 },
-		);
+		return handleApiError("create collection", error);
 	}
 }
