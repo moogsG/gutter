@@ -1,4 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
+import {
+	handleApiError,
+	handleValidationError,
+} from "@/lib/api-error-handler";
 import { getJournalDb } from "@/lib/journal-db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { logValidationFailure } from "@/lib/security-logger";
@@ -17,15 +21,12 @@ export async function GET(req: NextRequest) {
 	const date = req.nextUrl.searchParams.get("date");
 
 	if (!date) {
-		return NextResponse.json({ error: "Date required" }, { status: 400 });
+		return handleValidationError("Date required");
 	}
 
 	// Validate date format (YYYY-MM-DD)
 	if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-		return NextResponse.json(
-			{ error: "Invalid date format. Use YYYY-MM-DD" },
-			{ status: 400 },
-		);
+		return handleValidationError("Invalid date format. Use YYYY-MM-DD");
 	}
 
 	try {
@@ -61,11 +62,7 @@ export async function GET(req: NextRequest) {
 
 		return NextResponse.json(topLevel);
 	} catch (error) {
-		console.error("Error fetching journal entries:", error);
-		return NextResponse.json(
-			{ error: "Failed to fetch entries" },
-			{ status: 500 },
-		);
+		return handleApiError("fetch journal entries", error);
 	}
 }
 
@@ -82,24 +79,18 @@ export async function POST(req: NextRequest) {
 		const { date, signifier, text, tags = [], parent_id } = body;
 
 		if (!date || !signifier || !text) {
-			return NextResponse.json(
-				{ error: "Missing required fields" },
-				{ status: 400 },
-			);
+			return handleValidationError("Missing required fields");
 		}
 
 		// Validate date format
 		if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-			return NextResponse.json(
-				{ error: "Invalid date format" },
-				{ status: 400 },
-			);
+			return handleValidationError("Invalid date format");
 		}
 
 		// Validate signifier (should be one of the allowed types)
 		const validSignifiers = ["task", "appointment", "note", "memory", "important"];
 		if (!validSignifiers.includes(signifier)) {
-			return NextResponse.json({ error: "Invalid signifier" }, { status: 400 });
+			return handleValidationError("Invalid signifier");
 		}
 
 		// Validate and sanitize entry content
@@ -108,9 +99,9 @@ export async function POST(req: NextRequest) {
 			await logValidationFailure(req, "/api/journal", {
 				errors: validation.errors,
 			});
-			return NextResponse.json(
-				{ error: "Validation failed", details: validation.errors },
-				{ status: 400 },
+			return handleValidationError(
+				"Validation failed",
+				validation.errors.join(", "),
 			);
 		}
 
@@ -171,10 +162,6 @@ export async function POST(req: NextRequest) {
 			tags: JSON.parse(entry.tags as unknown as string),
 		});
 	} catch (error) {
-		console.error("Error creating journal entry:", error);
-		return NextResponse.json(
-			{ error: "Failed to create entry" },
-			{ status: 500 },
-		);
+		return handleApiError("create journal entry", error);
 	}
 }

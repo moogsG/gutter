@@ -1,4 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
+import {
+	handleApiError,
+	handleValidationError,
+} from "@/lib/api-error-handler";
 import { getDb } from "@/lib/db";
 import type { FutureLogEntry } from "@/types/journal";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
@@ -37,11 +41,7 @@ export async function GET(req: NextRequest) {
 
 		return NextResponse.json(parsed);
 	} catch (error) {
-		console.error("Error fetching future log:", error);
-		return NextResponse.json(
-			{ error: "Failed to fetch future log" },
-			{ status: 500 },
-		);
+		return handleApiError("fetch future log", error);
 	}
 }
 
@@ -57,10 +57,7 @@ export async function POST(req: NextRequest) {
 		const { target_month, signifier, text } = await req.json();
 
 		if (!target_month || !signifier || !text) {
-			return NextResponse.json(
-				{ error: "Missing required fields" },
-				{ status: 400 },
-			);
+			return handleValidationError("Missing required fields");
 		}
 
 		const db = getDb();
@@ -80,10 +77,6 @@ export async function POST(req: NextRequest) {
 			migrated: entry.migrated === 1,
 		} as FutureLogEntry);
 	} catch (error) {
-		console.error("Error creating future log entry:", error);
-		return NextResponse.json(
-			{ error: "Failed to create entry" },
-			{ status: 500 },
-		);
+		return handleApiError("create future log entry", error);
 	}
 }
