@@ -3,7 +3,7 @@ import {
 	handleApiError,
 	handleValidationError,
 } from "@/lib/api-error-handler";
-import { getJournalDb } from "@/lib/journal-db";
+import { getDb } from "@/lib/db";
 import type { Collection } from "@/types/journal";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 	if (limited) return limited;
 
 	try {
-		const db = getJournalDb();
+		const db = getDb();
 		const collections = db
 			.prepare(
 				`SELECT c.*, 
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
 			return handleValidationError("Title required");
 		}
 
-		const db = getJournalDb();
+		const db = getDb();
 		const id = `col-${Date.now()}`;
 		const now = new Date().toISOString();
 

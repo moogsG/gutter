@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { readFile, unlink } from "node:fs/promises";
 import type { NextRequest } from "next/server";
 import { promisify } from "node:util";
-import { getJournalDb } from "@/lib/journal-db";
+import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 const execAsync = promisify(exec);
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
 		});
 
 		// Get all prep data from DB
-		const db = getJournalDb();
+		const db = getDb();
 		const prepRows = db.prepare("SELECT * FROM meeting_prep").all() as any[];
 		// Key prep by event_id + occurrence_date for recurring meeting support
 		const prepByKey = new Map(

@@ -3,7 +3,7 @@ import {
 	handleApiError,
 	handleValidationError,
 } from "@/lib/api-error-handler";
-import { getJournalDb } from "@/lib/journal-db";
+import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { logValidationFailure } from "@/lib/security-logger";
 import { validateJournalEntry } from "@/lib/validation";
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 	}
 
 	try {
-		const db = getJournalDb();
+		const db = getDb();
 		const entries = db
 			.prepare(
 				`SELECT id, date, signifier, text, status, migrated_to, migrated_from, 
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
 		const sanitizedText = validation.sanitized?.content || text;
 		const sanitizedTags = validation.sanitized?.tags || tags;
 
-		const db = getJournalDb();
+		const db = getDb();
 
 		// Get max sort_order — scoped to siblings (same parent or top-level)
 		const maxOrder = parent_id

@@ -3,7 +3,7 @@ import {
 	handleApiError,
 	handleValidationError,
 } from "@/lib/api-error-handler";
-import { getJournalDb } from "@/lib/journal-db";
+import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 			return handleValidationError("entryIds (array) and targetDate required");
 		}
 
-		const db = getJournalDb();
+		const db = getDb();
 		const now = new Date().toISOString();
 
 		// Get max sort_order for target date

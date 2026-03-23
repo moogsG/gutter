@@ -3,7 +3,7 @@ import {
 	handleApiError,
 	handleValidationError,
 } from "@/lib/api-error-handler";
-import { getJournalDb } from "@/lib/journal-db";
+import { getDb } from "@/lib/db";
 import type { FutureLogEntry } from "@/types/journal";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 	const month = req.nextUrl.searchParams.get("month");
 
 	try {
-		const db = getJournalDb();
+		const db = getDb();
 		let query = "SELECT * FROM future_log";
 		const params: string[] = [];
 
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
 			return handleValidationError("Missing required fields");
 		}
 
-		const db = getJournalDb();
+		const db = getDb();
 		const id = `fl-${Date.now()}`;
 		const now = new Date().toISOString();
 

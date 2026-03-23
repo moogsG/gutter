@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { NextRequest } from "next/server";
-import { getJournalDb } from "@/lib/journal-db";
+import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 interface LogRow {
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 	});
 	if (limited) return limited;
 
-	const db = getJournalDb();
+	const db = getDb();
 	const today = new Date().toISOString().split("T")[0];
 
 	// Completed tasks (journal entries with status 'done')
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
 		return Response.json({ error: "Empty entry" }, { status: 400 });
 	}
 
-	const db = getJournalDb();
+	const db = getDb();
 	const timestamp = new Date().toISOString();
 	const today = new Date().toISOString().split("T")[0];
 	const id = `je-${Date.now()}`;

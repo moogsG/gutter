@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getJournalDb } from "@/lib/journal-db";
+import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 export async function GET(req: NextRequest) {
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
 	});
 	if (limited) return limited;
 
-	const db = getJournalDb();
+	const db = getDb();
 
 	// Fetch from projects table with entry counts
 	const projects = db

@@ -1,4 +1,4 @@
-import { getJournalDb } from "@/lib/journal-db";
+import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 // POST: Update prep data for a meeting (called by Jynx after processing)
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
 			return Response.json({ error: "Missing eventId" }, { status: 400 });
 		}
 
-		const db = getJournalDb();
+		const db = getDb();
 		const now = new Date().toISOString();
 
 		// Match by event_id + occurrence_date if provided, otherwise fall back to event_id only (for backwards compat)
