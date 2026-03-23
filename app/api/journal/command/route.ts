@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { type NextRequest, NextResponse } from "next/server";
 import { createCalendarEvent } from "@/lib/calendar";
-import { getDb } from "@/lib/db";
 import { getJournalDb } from "@/lib/journal-db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
@@ -448,7 +447,7 @@ function executeGetLocally(action: LLMAction): {
 
 		// /api/collections
 		if (action.path === "/api/collections") {
-			const collections = getDb()
+			const collections = getJournalDb()
 				.prepare("SELECT * FROM collections ORDER BY created_at DESC")
 				.all();
 			return { ok: true, data: collections };

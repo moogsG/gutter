@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
-import { getDb } from "@/lib/db";
+import { getJournalDb } from "@/lib/journal-db";
 import { generateMeetingPrep } from "@/lib/meeting-prep";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		const db = getDb();
+		const db = getJournalDb();
 		const now = new Date().toISOString();
 		const occurrenceDate = time
 			? new Date(time).toISOString().split("T")[0]

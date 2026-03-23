@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { getJournalDb } from "@/lib/journal-db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 export async function GET(req: NextRequest) {
@@ -10,20 +10,28 @@ export async function GET(req: NextRequest) {
 	});
 	if (limited) return limited;
 
-	const db = getDb();
+	const db = getJournalDb();
 
+	// Fetch from projects table with entry counts
 	const projects = db
 		.prepare(`
-    SELECT
-      project as name,
-      COUNT(*) as total,
-      SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as open,
-      SUM(CASE WHEN status = 'complete' THEN 1 ELSE 0 END) as completed,
-      MAX(created_at) as last_activity
-    FROM tasks
-    GROUP BY project
-    ORDER BY open DESC, last_activity DESC
-  `)
+      SELECT
+        p.id,
+        p.name,
+        p.description,
+        p.color,
+        p.icon,
+        p.active,
+        COUNT(je.id) as total,
+        SUM(CASE WHEN je.status IN ('open', 'in-progress') THEN 1 ELSE 0 END) as open,
+        SUM(CASE WHEN je.status = 'done' THEN 1 ELSE 0 END) as completed,
+        MAX(je.updated_at) as last_activity
+      FROM projects p
+      LEFT JOIN journal_entries je ON je.collection_id = p.id
+      WHERE p.active = 1
+      GROUP BY p.id
+      ORDER BY open DESC, last_activity DESC
+    `)
 		.all();
 
 	return NextResponse.json(projects);

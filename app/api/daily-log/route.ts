@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { NextRequest } from "next/server";
-import { getDb } from "@/lib/db";
+import { getJournalDb } from "@/lib/journal-db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 interface LogRow {
@@ -21,34 +21,30 @@ export async function GET(req: NextRequest) {
 	});
 	if (limited) return limited;
 
-	const db = getDb();
+	const db = getJournalDb();
 	const today = new Date().toISOString().split("T")[0];
 
+	// Completed tasks (journal entries with status 'done')
 	const completed = db
 		.prepare(
-			`SELECT id, text, project, completed_at, 'completed' as type FROM tasks 
-     WHERE status IN ('done', 'completed') AND date(completed_at) = ?
-     ORDER BY completed_at DESC`,
+			`SELECT id, text, collection_id as project, updated_at as completed_at, 'completed' as type 
+       FROM journal_entries 
+       WHERE status = 'done' AND date(updated_at) = ?
+       ORDER BY updated_at DESC`,
 		)
 		.all(today) as LogRow[];
 
-	const captured = db
-		.prepare(
-			`SELECT id, text, project, created_at as completed_at, 'captured' as type FROM tasks
-     WHERE date(created_at) = ? AND tags LIKE '%captured%'
-     ORDER BY created_at DESC`,
-		)
-		.all(today) as LogRow[];
-
+	// Notes (journal entries with signifier 'note')
 	const notes = db
 		.prepare(
-			`SELECT id, text, timestamp as completed_at, 'note' as type FROM notes
-     WHERE date(timestamp) = ?
-     ORDER BY timestamp DESC`,
+			`SELECT id, text, created_at as completed_at, 'note' as type 
+       FROM journal_entries
+       WHERE signifier = 'note' AND date = ?
+       ORDER BY created_at DESC`,
 		)
 		.all(today) as LogRow[];
 
-	const entries = [...completed, ...captured, ...notes].sort((a, b) =>
+	const entries = [...completed, ...notes].sort((a, b) =>
 		String(b.completed_at || "").localeCompare(String(a.completed_at || "")),
 	);
 
@@ -69,14 +65,23 @@ export async function POST(req: NextRequest) {
 		return Response.json({ error: "Empty entry" }, { status: 400 });
 	}
 
-	const db = getDb();
+	const db = getJournalDb();
 	const timestamp = new Date().toISOString();
-	const id = `log-${Date.now()}`;
+	const today = new Date().toISOString().split("T")[0];
+	const id = `je-${Date.now()}`;
 
-	// Save to notes table
+	// Get next sort order for today
+	const lastEntry = db
+		.prepare("SELECT MAX(sort_order) as max_order FROM journal_entries WHERE date = ?")
+		.get(today) as { max_order: number | null };
+	const sortOrder = (lastEntry?.max_order || 0) + 1;
+
+	// Save to journal_entries table as a note
 	db.prepare(
-		"INSERT INTO notes (id, text, timestamp, created_at) VALUES (?, ?, ?, ?)",
-	).run(id, text.trim(), timestamp, timestamp);
+		`INSERT INTO journal_entries 
+     (id, date, signifier, text, status, sort_order, created_at, updated_at) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+	).run(id, today, "note", text.trim(), "open", sortOrder, timestamp, timestamp);
 
 	// Also append to daily notes file
 	try {
