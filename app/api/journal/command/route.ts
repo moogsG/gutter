@@ -2,7 +2,6 @@ import { randomBytes } from "node:crypto";
 import { type NextRequest, NextResponse } from "next/server";
 import { createCalendarEvent } from "@/lib/calendar";
 import { getDb } from "@/lib/db";
-import { getJournalDb } from "@/lib/journal-db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 function uniqueId(prefix: string): string {
@@ -197,7 +196,7 @@ async function executeMutationLocally(
 	action: LLMAction,
 ): Promise<{ ok: boolean; data?: unknown; error?: string }> {
 	try {
-		const db = getJournalDb();
+		const db = getDb();
 
 		// POST /api/journal — Create entry
 		if (
@@ -424,7 +423,7 @@ function executeGetLocally(action: LLMAction): {
 	error?: string;
 } {
 	try {
-		const db = getJournalDb();
+		const db = getDb();
 
 		// /api/journal?date=YYYY-MM-DD
 		if (action.path === "/api/journal" && action.query?.date) {

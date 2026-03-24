@@ -3,7 +3,7 @@ import {
 	handleApiError,
 	handleValidationError,
 } from "@/lib/api-error-handler";
-import { getJournalDb } from "@/lib/journal-db";
+import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { sanitizeText, validateId } from "@/lib/validation";
 import { deleteJournalEntry, upsertJournalEntry } from "@/lib/vector-store";
@@ -29,7 +29,7 @@ export async function PATCH(
 		}
 
 		const body = await req.json();
-		const db = getJournalDb();
+		const db = getDb();
 
 		// Validate status if provided
 		if (body.status !== undefined) {
@@ -173,7 +173,7 @@ export async function DELETE(
 		if (!idValidation.valid) {
 			return handleValidationError(idValidation.error || "Invalid ID");
 		}
-		const db = getJournalDb();
+		const db = getDb();
 		const hardDelete = req.nextUrl.searchParams.get("hard") === "true";
 
 		if (hardDelete) {

@@ -3,7 +3,7 @@ import {
 	handleApiError,
 	handleValidationError,
 } from "@/lib/api-error-handler";
-import { getJournalDb } from "@/lib/journal-db";
+import { getDb } from "@/lib/db";
 import type { JournalEntry } from "@/types/journal";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 	}
 
 	try {
-		const db = getJournalDb();
+		const db = getDb();
 
 		// Get all unresolved tasks and appointments from the month
 		const entries = db

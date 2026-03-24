@@ -1,13 +1,12 @@
 # Database Schema Documentation
 
-Gutter uses two SQLite databases for data persistence:
+Gutter uses a single SQLite database for all data persistence:
 
-1. **`gutter.db`** — Legacy database (being phased out)
-2. **`gutter-journal.db`** — Primary database for journal entries and related data
+**`gutter-journal.db`** — Primary database for journal entries, collections, meeting prep, and all core features.
 
 ---
 
-## `gutter-journal.db` (Primary Database)
+## Database Schema
 
 ### Core Tables
 
@@ -116,25 +115,18 @@ Metadata key-value store for database versioning and config.
 
 ---
 
-## `gutter.db` (Legacy Database)
+## Migration from Legacy Database
 
-**Status:** Being phased out. New features should use `gutter-journal.db`.
+Prior to v1.0.1, Gutter used two databases (`gutter.db` and `gutter-journal.db`), causing data inconsistency. This was consolidated in the database refactor.
 
-Contains duplicate tables and experimental features from early development:
+**If upgrading from v1.0.0 or earlier:**
 
-- `tasks` — Task management (superseded by `journal_entries` with signifier `task`)
-- `task_events` — Task history
-- `task_notes` — Task-specific notes
-- `ideas` — Quick capture (moved to journal entries)
-- `notes` — General notes (moved to journal entries)
-- `calendar_events` — Local calendar cache (deprecated, now fetched via accli)
-- `chat_messages` — Chat history (experimental feature)
+1. Backup your data: `cp gutter.db gutter.db.backup`
+2. Run the migration script: `bun run scripts/migrate-to-single-db.ts`
+3. Verify data in the UI
+4. Delete legacy database: `rm gutter.db`
 
-**Migration Plan:**
-1. Extract any remaining data from `gutter.db`
-2. Migrate to `gutter-journal.db` schema
-3. Remove `gutter.db` dependencies
-4. Delete legacy database
+See `docs/DATABASE-CONSOLIDATION-PLAN.md` for technical details.
 
 ---
 
@@ -214,15 +206,16 @@ When schema changes are needed:
 ### Version History
 - **v1.0** (2026-03-20): Initial public release
   - Dual database system (gutter.db + gutter-journal.db)
-  - Journal entries with signifiers, collections, future log
-  - Meeting prep with LLM integration
+- **v1.0.1** (2026-03-23): Database consolidation
+  - Consolidated to single database (gutter-journal.db)
+  - Removed legacy gutter.db module
+  - Migration script for safe data merge
 
 ### Planned Changes
-- [ ] Consolidate into single database (remove gutter.db)
-- [ ] Add foreign key constraints (currently disabled for flexibility)
-- [ ] Migrate to migrations system (currently ad-hoc schema updates)
-- [ ] Add database versioning in `_meta` table
+- [ ] Add foreign key constraints (currently enabled but not enforced on all relationships)
+- [ ] Formal migrations system (currently ad-hoc ALTER TABLE in lib/db.ts)
 - [ ] Archive old entries (auto-archive entries >1 year old)
+- [ ] Vacuum automation (periodic VACUUM to reclaim space)
 
 ---
 
@@ -295,9 +288,9 @@ CREATE INDEX idx_new_table_field ON new_table(field);
 ### Querying from Code
 
 ```typescript
-import { getJournalDb } from "@/lib/journal-db";
+import { getDb } from "@/lib/db";
 
-const db = getJournalDb();
+const db = getDb();
 
 // Prepared statement (prevents SQL injection)
 const entries = db

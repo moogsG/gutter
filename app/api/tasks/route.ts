@@ -3,7 +3,7 @@ import {
 	handleApiError,
 	handleValidationError,
 } from "@/lib/api-error-handler";
-import { getJournalDb } from "@/lib/journal-db";
+import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { logValidationFailure } from "@/lib/security-logger";
 import { validateId } from "@/lib/validation";
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 		maxRequests: 100,
 	});
 	if (limited) return limited;
-	const db = getJournalDb();
+	const db = getDb();
 	const { searchParams } = new URL(req.url);
 	const statusParam = searchParams.get("status");
 	const dateParam = searchParams.get("date");
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
 	});
 	if (limited) return limited;
 
-	const db = getJournalDb();
+	const db = getDb();
 	const body = await req.json();
 	const { action, taskId } = body;
 
