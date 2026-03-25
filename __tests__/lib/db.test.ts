@@ -122,7 +122,7 @@ describe("Database Operations", () => {
 			db.prepare("DELETE FROM journal_entries WHERE id = ?").run(id);
 
 			const result = db.prepare("SELECT * FROM journal_entries WHERE id = ?").get(id);
-			expect(result).toBeNull();
+			expect(result).toBeFalsy(); // null (bun:sqlite) or undefined (better-sqlite3)
 		});
 
 		it("enforces foreign key on collection_id", () => {
@@ -279,7 +279,7 @@ describe("Database Operations", () => {
 			db.prepare("DELETE FROM collections WHERE id = ?").run(id);
 
 			const result = db.prepare("SELECT * FROM collections WHERE id = ?").get(id);
-			expect(result).toBeNull();
+			expect(result).toBeFalsy(); // null (bun:sqlite) or undefined (better-sqlite3)
 		});
 	});
 
