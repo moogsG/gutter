@@ -17,6 +17,13 @@ interface RequestLog {
 
 const requestLogs = new Map<string, RequestLog>();
 
+/**
+ * Clear all rate limit state (for testing only)
+ */
+export function clearRateLimitState() {
+	requestLogs.clear();
+}
+
 // Cleanup old entries every 5 minutes
 setInterval(
 	() => {
