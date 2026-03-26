@@ -38,6 +38,7 @@ describe("Database operations", () => {
 	});
 
 	afterAll(() => {
+		// Close this test's isolated DB instance (not the global singleton)
 		db.close();
 		if (existsSync(TEST_DB_PATH)) {
 			unlinkSync(TEST_DB_PATH);

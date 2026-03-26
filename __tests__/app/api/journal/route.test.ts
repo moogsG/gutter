@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import { GET, POST } from "@/app/api/journal/route";
 import { getDb } from "@/lib/db";
@@ -25,19 +25,28 @@ function cleanupTestDb() {
 	});
 }
 
+// Shared database instance for all tests
+let sharedDb: ReturnType<typeof getDb>;
+
+// Setup once before all tests
+beforeAll(() => {
+	cleanupTestDb();
+	sharedDb = getDb();
+});
+
+// Cleanup once after all tests
+afterAll(() => {
+	cleanupTestDb();
+	if (originalDbPath) {
+		process.env.DATABASE_PATH = originalDbPath;
+	}
+});
+
 describe("GET /api/journal", () => {
 	let db: ReturnType<typeof getDb>;
 
 	beforeAll(() => {
-		cleanupTestDb();
-		db = getDb();
-	});
-
-	afterAll(() => {
-		cleanupTestDb();
-		if (originalDbPath) {
-			process.env.DATABASE_PATH = originalDbPath;
-		}
+		db = sharedDb;
 	});
 
 	beforeEach(() => {
@@ -152,7 +161,7 @@ describe("POST /api/journal", () => {
 	let db: ReturnType<typeof getDb>;
 
 	beforeAll(() => {
-		db = getDb();
+		db = sharedDb;
 	});
 
 	beforeEach(() => {
