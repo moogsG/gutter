@@ -111,10 +111,17 @@ describe("PATCH /api/journal/[id]", () => {
 
 	it("updates status successfully", async () => {
 		const now = new Date().toISOString();
-		db.prepare(`
+		const insertResult = db.prepare(`
 			INSERT INTO journal_entries (id, date, signifier, text, status, sort_order, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		`).run("test-patch-5", "2099-01-01", "task", "Test task", "open", 1, now, now);
+		
+		expect(insertResult.changes).toBe(1);
+
+		// Verify insert worked
+		const before = db.prepare("SELECT * FROM journal_entries WHERE id = ?").get("test-patch-5") as any;
+		expect(before).toBeTruthy();
+		expect(before.status).toBe("open");
 
 		const req = new NextRequest("http://localhost:3000/api/journal/test-patch-5", {
 			method: "PATCH",
@@ -126,6 +133,7 @@ describe("PATCH /api/journal/[id]", () => {
 		expect(res.status).toBe(200);
 
 		const updated = db.prepare("SELECT * FROM journal_entries WHERE id = ?").get("test-patch-5") as any;
+		expect(updated).toBeTruthy();
 		expect(updated.status).toBe("done");
 	});
 
