@@ -30,7 +30,8 @@ describe("Database Operations", () => {
 	});
 
 	afterAll(() => {
-		db.close();
+		// Don't close the DB - it's a global singleton that other tests may still need
+		// Vitest will properly clean up at the end of the test run
 		cleanupTestDb();
 	});
 
