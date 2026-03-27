@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "vitest";
 import { NextRequest } from "next/server";
 import { GET, POST } from "@/app/api/future-log/route";
 import { getDb } from "@/lib/db";

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "vitest";
 import { GET, POST } from "@/app/api/collections/route";
 import { getDb } from "@/lib/db";
 import { clearRateLimitState } from "@/lib/rate-limit";
