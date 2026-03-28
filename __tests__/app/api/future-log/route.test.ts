@@ -320,8 +320,8 @@ describe("POST /api/future-log", () => {
 		const response1 = await POST(req1 as any);
 		const data1 = await response1.json();
 
-		// Wait 1ms to ensure different timestamps
-		await new Promise((resolve) => setTimeout(resolve, 1));
+		// Wait 3ms to ensure different Date.now() IDs
+		await new Promise((resolve) => setTimeout(resolve, 3));
 
 		const response2 = await POST(req2 as any);
 		const data2 = await response2.json();
@@ -344,8 +344,8 @@ describe("POST /api/future-log", () => {
 			const response = await POST(req as any);
 			expect(response.status).toBe(200);
 
-			// Wait 1ms to avoid duplicate IDs
-			await new Promise((resolve) => setTimeout(resolve, 1));
+			// Wait 3ms to avoid Date.now() ID collisions
+			await new Promise((resolve) => setTimeout(resolve, 3));
 		}
 
 		// 21st request should be rate limited
