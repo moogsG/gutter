@@ -30,7 +30,8 @@ describe("Database Operations", () => {
 	});
 
 	afterAll(() => {
-		db.close();
+		// Don't close the DB - it's a global singleton that other tests may still need
+		// Vitest will properly clean up at the end of the test run
 		cleanupTestDb();
 	});
 
@@ -122,7 +123,7 @@ describe("Database Operations", () => {
 			db.prepare("DELETE FROM journal_entries WHERE id = ?").run(id);
 
 			const result = db.prepare("SELECT * FROM journal_entries WHERE id = ?").get(id);
-			expect(result).toBeUndefined();
+			expect(result).toBeFalsy(); // null (bun:sqlite) or undefined (better-sqlite3)
 		});
 
 		it("enforces foreign key on collection_id", () => {
@@ -279,7 +280,7 @@ describe("Database Operations", () => {
 			db.prepare("DELETE FROM collections WHERE id = ?").run(id);
 
 			const result = db.prepare("SELECT * FROM collections WHERE id = ?").get(id);
-			expect(result).toBeUndefined();
+			expect(result).toBeFalsy(); // null (bun:sqlite) or undefined (better-sqlite3)
 		});
 	});
 
