@@ -15,8 +15,8 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // If no AUTH_PASSWORD set, skip auth entirely (dev mode)
-  if (!process.env.AUTH_PASSWORD) {
+  // If no AUTH_PASSWORD_HASH set, skip auth entirely (dev mode)
+  if (!process.env.AUTH_PASSWORD_HASH) {
     return NextResponse.next();
   }
 
