@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Command } from "cmdk";
 import { useRouter } from "next/navigation";
+import Fuse from "fuse.js";
 import {
   Calendar,
   BookOpen,
@@ -149,6 +150,24 @@ export function OmniBar({ onNavigateDate, currentDate, onOpenShortcuts }: OmniBa
   const [triggerSearch] = useLazySearchEntriesQuery();
   const [triggerSemantic] = useLazySemanticSearchQuery();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Fuse.js for fuzzy matching navigation items
+  const fuse = useMemo(
+    () =>
+      new Fuse(NAV_ITEMS, {
+        keys: ["label", "keywords"],
+        threshold: 0.4, // 0 = exact match, 1 = match anything
+        includeScore: true,
+        minMatchCharLength: 2,
+      }),
+    []
+  );
+
+  const filteredNavItems = useMemo(() => {
+    if (query.trim().length === 0) return NAV_ITEMS;
+    const results = fuse.search(query);
+    return results.map((r) => r.item);
+  }, [query, fuse]);
 
   // cmd+k listener
   useEffect(() => {
@@ -324,23 +343,25 @@ export function OmniBar({ onNavigateDate, currentDate, onOpenShortcuts }: OmniBa
             )}
 
             {/* Navigation */}
-            <Command.Group heading="Navigation">
-              {NAV_ITEMS.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Command.Item
-                    key={item.id}
-                    value={item.id}
-                    keywords={item.keywords}
-                    onSelect={handleSelect}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer aria-selected:bg-primary/10 aria-selected:text-primary"
-                  >
-                    <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
-                    <span>{item.label}</span>
-                  </Command.Item>
-                );
-              })}
-            </Command.Group>
+            {filteredNavItems.length > 0 && (
+              <Command.Group heading="Navigation">
+                {filteredNavItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Command.Item
+                      key={item.id}
+                      value={item.id}
+                      keywords={item.keywords}
+                      onSelect={handleSelect}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer aria-selected:bg-primary/10 aria-selected:text-primary"
+                    >
+                      <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
+                      <span>{item.label}</span>
+                    </Command.Item>
+                  );
+                })}
+              </Command.Group>
+            )}
 
             {/* FTS search results */}
             {searchResults.length > 0 && (
