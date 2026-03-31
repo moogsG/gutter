@@ -17,6 +17,7 @@ import {
   Heart,
   Clock,
   Kanban,
+  Keyboard,
 } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
@@ -28,6 +29,7 @@ import type { JournalEntry, SemanticSearchResult, Signifier } from "@/types/jour
 interface OmniBarProps {
   onNavigateDate?: (date: string) => void;
   currentDate?: string;
+  onOpenShortcuts?: () => void;
 }
 
 const NAV_ITEMS = [
@@ -37,6 +39,7 @@ const NAV_ITEMS = [
   { id: "collections", label: "Collections", href: "/collections", icon: BookOpen, keywords: ["collections", "lists", "groups"] },
   { id: "kanban", label: "Kanban", href: "/kanban", icon: Kanban, keywords: ["kanban", "board", "tasks", "status", "todo", "in progress", "blocked", "done"] },
   { id: "migrate", label: "Migrate Entries", href: "/migrate", icon: ArrowRight, keywords: ["migrate", "move", "transfer", "unresolved"] },
+  { id: "help", label: "Keyboard Shortcuts", href: "", icon: Keyboard, keywords: ["help", "shortcuts", "keyboard", "?", "hotkeys", "commands"] },
 ];
 
 const SIGNIFIER_ICONS: Record<Signifier, typeof Circle> = {
@@ -137,7 +140,7 @@ function formatEntryDate(dateStr: string): string {
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
-export function OmniBar({ onNavigateDate, currentDate }: OmniBarProps) {
+export function OmniBar({ onNavigateDate, currentDate, onOpenShortcuts }: OmniBarProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<JournalEntry[]>([]);
@@ -210,6 +213,14 @@ export function OmniBar({ onNavigateDate, currentDate }: OmniBarProps) {
     (value: string) => {
       setOpen(false);
 
+      // Help/shortcuts
+      if (value === "help") {
+        if (onOpenShortcuts) {
+          onOpenShortcuts();
+        }
+        return;
+      }
+
       // Navigation items
       const navItem = NAV_ITEMS.find((n) => n.id === value);
       if (navItem) {
@@ -237,7 +248,7 @@ export function OmniBar({ onNavigateDate, currentDate }: OmniBarProps) {
         return;
       }
     },
-    [router, onNavigateDate]
+    [router, onNavigateDate, onOpenShortcuts]
   );
 
   const parsedDate = query.trim().length > 0 ? parseNaturalDate(query) : null;
