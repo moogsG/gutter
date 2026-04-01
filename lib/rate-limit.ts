@@ -90,6 +90,11 @@ export function rateLimitMiddleware(
 	req: Request,
 	config?: RateLimitConfig,
 ): Response | null {
+	// Skip rate limiting entirely if disabled (single-user/local deployments)
+	if (process.env.DISABLE_RATE_LIMIT === "true") {
+		return null;
+	}
+
 	// Use IP address as identifier (fallback to a default if not available)
 	const ip = getClientIp(req);
 
