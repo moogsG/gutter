@@ -87,45 +87,9 @@ export function checkRateLimit(
  * }
  */
 export function rateLimitMiddleware(
-	req: Request,
-	config?: RateLimitConfig,
+	_req: Request,
+	_config?: RateLimitConfig,
 ): Response | null {
-	// Skip rate limiting entirely if disabled (single-user/local deployments)
-	if (process.env.DISABLE_RATE_LIMIT === "true") {
-		return null;
-	}
-
-	// Use IP address as identifier (fallback to a default if not available)
-	const ip = getClientIp(req);
-
-	const { allowed, resetTime, remaining } = checkRateLimit(ip, config);
-
-	if (!allowed) {
-		// Log rate limit exceeded event
-		const url = new URL(req.url);
-		logRateLimitExceeded(req, url.pathname, {
-			limit: config?.maxRequests,
-			windowMs: config?.windowMs,
-		}).catch((err) => console.error("[rate-limit] Failed to log event:", err));
-
-		return new Response(
-			JSON.stringify({
-				error: "Too many requests",
-				retryAfter: Math.ceil((resetTime - Date.now()) / 1000),
-			}),
-			{
-				status: 429,
-				headers: {
-					"Content-Type": "application/json",
-					"Retry-After": Math.ceil((resetTime - Date.now()) / 1000).toString(),
-					"X-RateLimit-Limit": config?.maxRequests.toString() || "100",
-					"X-RateLimit-Remaining": "0",
-					"X-RateLimit-Reset": Math.ceil(resetTime / 1000).toString(),
-				},
-			},
-		);
-	}
-
-	// Add rate limit headers to response (caller should copy these to their response)
+	// Rate limiting disabled — single-user local app
 	return null;
 }
