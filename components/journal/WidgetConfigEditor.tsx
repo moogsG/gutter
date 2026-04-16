@@ -13,7 +13,7 @@ interface WidgetConfigEditorProps {
   onChange: (config: UiConfigState) => void;
 }
 
-const WIDGET_SOURCE_TYPES = new Set(["calendar_today", "weather", "journal_unresolved"]);
+const WIDGET_SOURCE_TYPES = new Set(["calendar_today", "weather", "journal_unresolved", "jira_assigned", "journal_do_next"]);
 
 export function hasWidgetConfig(sourceType: string): boolean {
   return WIDGET_SOURCE_TYPES.has(sourceType);
@@ -24,9 +24,13 @@ export function defaultUiConfig(sourceType: string): UiConfigState {
     case "calendar_today":
       return { variant: "timeline", maxItems: 5, showCalendarNames: true, colSpan: 8, rowSpan: 1, order: 0 };
     case "weather":
-      return { variant: "hero", showHourly: true, hourlyCount: 4, colSpan: 8, rowSpan: 1, order: 0 };
+      return { variant: "hero", showHourly: true, hourlyCount: 4, unit: "C", colSpan: 8, rowSpan: 1, order: 0 };
     case "journal_unresolved":
       return { variant: "sections", maxItemsPerSection: 3, showLane: true, showWaitingOn: true, showInlineActions: false, colSpan: 8, rowSpan: 1, order: 0 };
+    case "jira_assigned":
+      return { variant: "grouped", maxItemsPerSection: 3, showPriority: true, showStatus: true, colSpan: 8, rowSpan: 1, order: 0 };
+    case "journal_do_next":
+      return { variant: "focused", maxInProgress: 3, maxOpen: 3, showLane: true, colSpan: 8, rowSpan: 1, order: 0 };
     default:
       // Non-widget prompts still get layout defaults
       return { colSpan: 8, rowSpan: 1, order: 0 };
@@ -105,6 +109,17 @@ export function WidgetConfigEditor({ sourceType, uiConfig, onChange }: WidgetCon
             </select>
           </div>
           <div className="space-y-1.5">
+            <Label className="text-xs">Temperature unit</Label>
+            <select
+              value={(uiConfig.unit as string) ?? "C"}
+              onChange={(e) => set("unit", e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <option value="C">Celsius (°C)</option>
+              <option value="F">Fahrenheit (°F)</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
             <Label className="text-xs">Hourly slots</Label>
             <Input
               type="number"
@@ -176,6 +191,104 @@ export function WidgetConfigEditor({ sourceType, uiConfig, onChange }: WidgetCon
         </div>
       </div>
       <LayoutFootprintSection uiConfig={uiConfig} onChange={onChange} />
+      </div>
+    );
+  }
+
+  if (sourceType === "jira_assigned") {
+    return (
+      <div className="space-y-3">
+        <div className="space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Widget Display</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Variant</Label>
+              <select
+                value={(uiConfig.variant as string) ?? "grouped"}
+                onChange={(e) => set("variant", e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="grouped">Grouped — urgent / blocked / active</option>
+                <option value="compact">Compact — dense flat list</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Items per section</Label>
+              <Input
+                type="number"
+                min={1}
+                max={10}
+                value={(uiConfig.maxItemsPerSection as number) ?? 3}
+                onChange={(e) => set("maxItemsPerSection", Number(e.target.value))}
+                className="h-9"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <SwitchRow
+              label="Show priority badges"
+              checked={(uiConfig.showPriority as boolean) ?? true}
+              onCheckedChange={(v) => set("showPriority", v)}
+            />
+            <SwitchRow
+              label="Show status badges"
+              checked={(uiConfig.showStatus as boolean) ?? true}
+              onCheckedChange={(v) => set("showStatus", v)}
+            />
+          </div>
+        </div>
+        <LayoutFootprintSection uiConfig={uiConfig} onChange={onChange} />
+      </div>
+    );
+  }
+
+  if (sourceType === "journal_do_next") {
+    return (
+      <div className="space-y-3">
+        <div className="space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Widget Display</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Variant</Label>
+              <select
+                value={(uiConfig.variant as string) ?? "focused"}
+                onChange={(e) => set("variant", e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="focused">Focused — grouped in-progress / up next</option>
+                <option value="compact">Compact — dense flat list</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Max in-progress</Label>
+              <Input
+                type="number"
+                min={1}
+                max={10}
+                value={(uiConfig.maxInProgress as number) ?? 3}
+                onChange={(e) => set("maxInProgress", Number(e.target.value))}
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Max open tasks</Label>
+              <Input
+                type="number"
+                min={1}
+                max={10}
+                value={(uiConfig.maxOpen as number) ?? 3}
+                onChange={(e) => set("maxOpen", Number(e.target.value))}
+                className="h-9"
+              />
+            </div>
+          </div>
+          <SwitchRow
+            label="Show lane badges"
+            checked={(uiConfig.showLane as boolean) ?? true}
+            onCheckedChange={(v) => set("showLane", v)}
+          />
+        </div>
+        <LayoutFootprintSection uiConfig={uiConfig} onChange={onChange} />
       </div>
     );
   }

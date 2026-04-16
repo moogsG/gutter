@@ -242,21 +242,6 @@ export function MorningView({ date, onOpenCapture }: MorningViewProps) {
         </div>
       )}
 
-      <div className="flex justify-center pt-2">
-        <Button
-          onClick={onOpenCapture}
-          size="lg"
-          className={cn(
-            "gap-2",
-            "bg-gradient-to-r from-primary to-primary/90",
-            "hover:from-primary/90 hover:to-primary/80",
-            "shadow-sm hover:shadow-md transition-all duration-200"
-          )}
-        >
-          <Sparkles className="w-5 h-5" />
-          Start Capturing
-        </Button>
-      </div>
     </div>
   );
 }

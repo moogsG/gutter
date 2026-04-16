@@ -6,12 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Check, X, GripVertical, Settings2, Calendar, ListChecks, Cloud, Briefcase } from "lucide-react";
+import { Plus, Trash2, Check, X, GripVertical, Settings2, Calendar, ListChecks, Cloud, Briefcase, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { WidgetConfigEditor, hasWidgetConfig, defaultUiConfig } from "./WidgetConfigEditor";
 import { LayoutFootprintSection } from "./today-focus/LayoutFootprintSection";
 import { COL_SPAN_LABELS } from "./today-focus/grid-layout";
+import { LayoutGridEditor } from "./today-focus/LayoutGridEditor";
 
 interface MorningViewPrompt {
   id: string;
@@ -47,6 +48,7 @@ export function MorningViewSettings() {
   const sourceTypeIcons = {
     static: Settings2,
     journal_unresolved: ListChecks,
+    journal_do_next: Zap,
     calendar_today: Calendar,
     meeting_prep_today: Calendar,
     weather: Cloud,
@@ -56,10 +58,11 @@ export function MorningViewSettings() {
   const sourceTypeLabels = {
     static: "Static Reminder",
     journal_unresolved: "Unresolved Tasks",
+    journal_do_next: "Do Next (Working Set)",
     calendar_today: "Today's Calendar",
     meeting_prep_today: "Meeting Prep",
     weather: "Weather",
-    jira_assigned: "Assigned Jira Issues",
+    jira_assigned: "Jira Issues",
   };
 
   const loadPrompts = async () => {
@@ -314,10 +317,11 @@ export function MorningViewSettings() {
                 >
                   <option value="static">Static Reminder</option>
                   <option value="journal_unresolved">Unresolved Tasks</option>
-                  <option value="calendar_today">Today's Calendar</option>
+                  <option value="journal_do_next">Do Next (Working Set)</option>
+                  <option value="calendar_today">Today&apos;s Calendar</option>
                   <option value="meeting_prep_today">Meeting Prep</option>
                   <option value="weather">Weather</option>
-                  <option value="jira_assigned">Assigned Jira Issues</option>
+                  <option value="jira_assigned">Jira Issues</option>
                 </select>
               </div>
 
@@ -403,10 +407,11 @@ export function MorningViewSettings() {
                 >
                   <option value="static">Static Reminder</option>
                   <option value="journal_unresolved">Unresolved Tasks</option>
-                  <option value="calendar_today">Today's Calendar</option>
+                  <option value="journal_do_next">Do Next (Working Set)</option>
+                  <option value="calendar_today">Today&apos;s Calendar</option>
                   <option value="meeting_prep_today">Meeting Prep</option>
                   <option value="weather">Weather</option>
-                  <option value="jira_assigned">Assigned Jira Issues</option>
+                  <option value="jira_assigned">Jira Issues</option>
                 </select>
               </div>
 
@@ -452,6 +457,20 @@ export function MorningViewSettings() {
           </CardContent>
         </Card>
       )}
+
+      {/* Visual grid editor — primary layout tool */}
+      {prompts.length > 0 && (
+        <LayoutGridEditor
+          prompts={prompts}
+          onSaved={loadPrompts}
+        />
+      )}
+
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
+          Prompts
+        </p>
+      </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId="prompts">
