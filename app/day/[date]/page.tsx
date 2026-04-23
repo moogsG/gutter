@@ -21,9 +21,36 @@ import {
 	useAddEntryMutation,
 	useDeleteEntryMutation,
 	useGetEntriesQuery,
+	useMigrateEntriesMutation,
 	useUpdateEntryMutation,
 } from "@/store/api/journalApi";
 import type { Signifier } from "@/types/journal";
+import { toast } from "sonner";
+
+function formatDate(date: Date): string {
+	return date.toISOString().split("T")[0];
+}
+
+function getMigrateTargetDate(viewDate: string): string {
+	const today = formatDate(new Date());
+	if (viewDate === today) {
+		const tomorrow = new Date();
+		tomorrow.setDate(tomorrow.getDate() + 1);
+		return formatDate(tomorrow);
+	}
+	return today;
+}
+
+function findEntryById(entries: any[], id: string): any | undefined {
+	for (const entry of entries) {
+		if (entry.id === id) return entry;
+		if (entry.children?.length) {
+			const found = findEntryById(entry.children, id);
+			if (found) return found;
+		}
+	}
+	return undefined;
+}
 
 interface CalendarEvent {
 	id: string;
@@ -273,6 +300,7 @@ export default function DayDetailPage() {
 	const [addEntry] = useAddEntryMutation();
 	const [updateEntry] = useUpdateEntryMutation();
 	const [deleteEntry] = useDeleteEntryMutation();
+	const [migrateEntries] = useMigrateEntriesMutation();
 
 	const loadDayData = async () => {
 		setLoading(true);
@@ -393,36 +421,34 @@ export default function DayDetailPage() {
 	);
 
 	const handleToggle = useCallback(
-		(id: string) => {
-			// Search top-level and children
-			let entry = entries.find((e) => e.id === id);
-			if (!entry) {
-				for (const e of entries) {
-					const child = e.children?.find((c) => c.id === id);
-					if (child) {
-						entry = child;
-						break;
-					}
-				}
-			}
+		async (id: string) => {
+			const entry = findEntryById(entries as any[], id);
 			if (!entry) return;
 
 			const newStatus = entry.status === "open" ? "done" : "open";
-			updateEntry({ id, status: newStatus, _date: date });
+			try {
+				await updateEntry({ id, status: newStatus, _date: date }).unwrap();
+			} catch {
+				toast.error("Failed to update task");
+			}
 		},
 		[entries, updateEntry, date],
 	);
 
 	const handleMigrate = useCallback(
-		(id: string) => {
-			updateEntry({
-				id,
-				status: "migrated",
-				migrated_to: "pending",
-				_date: date,
-			});
+		async (id: string) => {
+			try {
+				const targetDate = getMigrateTargetDate(date);
+				const result = await migrateEntries({
+					entryIds: [id],
+					targetDate,
+				}).unwrap();
+				toast.success(`Migrated to ${result.targetDate}`);
+			} catch {
+				toast.error("Failed to migrate");
+			}
 		},
-		[updateEntry, date],
+		[migrateEntries, date],
 	);
 
 	const handleKill = useCallback(

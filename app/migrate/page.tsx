@@ -1,25 +1,32 @@
 "use client";
 
 import { ArrowRight, ChevronLeft, ChevronRight, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { JournalHeader } from "@/components/journal/JournalHeader";
 import { SignifierIcon } from "@/components/journal/SignifierIcon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
 	useGetUnresolvedQuery,
 	useMigrateEntriesMutation,
 	useUpdateEntryMutation,
 } from "@/store/api/journalApi";
+import { toast } from "sonner";
 
 function formatMonth(date: Date): string {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function formatDate(date: Date): string {
+	return date.toISOString().split("T")[0];
+}
+
+function getTodayDateString(): string {
+	return formatDate(new Date());
+}
+
 export default function MigratePage() {
 	const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
-	const [targetDate, setTargetDate] = useState("");
 	const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
 	const month = formatMonth(currentMonth);
@@ -45,10 +52,23 @@ export default function MigratePage() {
 		);
 	};
 
-	const handleMigrateSelected = () => {
-		if (!targetDate || selectedIds.length === 0) return;
-		migrateEntries({ entryIds: selectedIds, targetDate });
-		setSelectedIds([]);
+	const handleMigrateSelected = async () => {
+		if (selectedIds.length === 0) return;
+		try {
+			const result = await migrateEntries({
+				entryIds: selectedIds,
+				targetDate: getTodayDateString(),
+			}).unwrap();
+			toast.success(
+				`Migrated ${result.migratedCount} entr${result.migratedCount === 1 ? "y" : "ies"} to ${result.targetDate}`,
+			);
+			if (result.skippedCount > 0) {
+				toast.message(`Skipped ${result.skippedCount} entr${result.skippedCount === 1 ? "y" : "ies"}`);
+			}
+			setSelectedIds([]);
+		} catch {
+			toast.error("Failed to migrate selected entries");
+		}
 	};
 
 	const handleKillEntry = (id: string) => {
@@ -59,6 +79,11 @@ export default function MigratePage() {
 		month: "long",
 		year: "numeric",
 	});
+	const todayDate = getTodayDateString();
+
+	useEffect(() => {
+		setSelectedIds((prev) => prev.filter((id) => entries.some((entry) => entry.id === id)));
+	}, [entries]);
 
 	return (
 		<>
@@ -104,16 +129,11 @@ export default function MigratePage() {
 									<span className="text-sm text-foreground font-medium">
 										{selectedIds.length} selected
 									</span>
-									<Input
-										type="date"
-										value={targetDate}
-										onChange={(e) => setTargetDate(e.target.value)}
-										placeholder="Target date"
-										className="h-9 flex-1 sm:max-w-[200px]"
-									/>
+									<span className="text-xs text-muted-foreground sm:ml-auto">
+										Target: Today ({todayDate})
+									</span>
 									<Button
 										onClick={handleMigrateSelected}
-										disabled={!targetDate}
 										size="sm"
 										className="shrink-0"
 									>

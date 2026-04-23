@@ -49,16 +49,11 @@ export async function PATCH(
 		// Validate signifier if provided
 		if (body.signifier !== undefined) {
 			const validSignifiers = [
-				"•",
-				"○",
-				"×",
-				"—",
-				">",
-				"<",
-				"*",
-				"!",
-				"?",
 				"task",
+				"appointment",
+				"note",
+				"memory",
+				"important",
 			];
 			if (!validSignifiers.includes(body.signifier)) {
 				return handleValidationError("Invalid signifier");
@@ -111,15 +106,31 @@ export async function PATCH(
 			updates.push("parent_id = ?");
 			values.push(body.parent_id);
 		}
+		if (body.lane !== undefined) {
+			updates.push("lane = ?");
+			values.push(body.lane);
+		}
+		if (body.priority !== undefined) {
+			updates.push("priority = ?");
+			values.push(body.priority);
+		}
+		if (body.waiting_on !== undefined) {
+			updates.push("waiting_on = ?");
+			values.push(body.waiting_on);
+		}
 
 		updates.push("updated_at = ?");
 		values.push(new Date().toISOString());
 
 		values.push(id);
 
-		db.prepare(
+		const updateResult = db.prepare(
 			`UPDATE journal_entries SET ${updates.join(", ")} WHERE id = ?`,
 		).run(...values);
+
+		if (!updateResult || updateResult.changes === 0) {
+			return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+		}
 
 		// Re-embed if searchable fields changed
 		const needsReEmbed =

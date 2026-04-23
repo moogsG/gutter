@@ -10,10 +10,21 @@ import { useState } from "react";
 
 interface TodayFocusProps {
   entries: JournalEntry[];
+  date: string;
 }
 
 function formatDate(date: Date): string {
   return date.toISOString().split("T")[0];
+}
+
+function getMigrateTargetDate(viewDate: string): string {
+  const today = formatDate(new Date());
+  if (viewDate === today) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return formatDate(tomorrow);
+  }
+  return today;
 }
 
 function isTask(entry: JournalEntry) {
@@ -50,7 +61,7 @@ function getLaneLabel(lane: TaskLane | null | undefined): string {
   return labels[lane] || "";
 }
 
-export function TodayFocus({ entries }: TodayFocusProps) {
+export function TodayFocus({ entries, date }: TodayFocusProps) {
   const [updateEntry] = useUpdateEntryMutation();
   const [migrateEntries] = useMigrateEntriesMutation();
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -104,7 +115,7 @@ export function TodayFocus({ entries }: TodayFocusProps) {
   const handleStart = async (id: string) => {
     setProcessingId(id);
     try {
-      await updateEntry({ id, status: "in-progress", _date: formatDate(new Date()) }).unwrap();
+      await updateEntry({ id, status: "in-progress", _date: date }).unwrap();
       toast.success("Started task");
     } catch (error) {
       toast.error("Failed to start task");
@@ -116,7 +127,7 @@ export function TodayFocus({ entries }: TodayFocusProps) {
   const handleComplete = async (id: string) => {
     setProcessingId(id);
     try {
-      await updateEntry({ id, status: "done", _date: formatDate(new Date()) }).unwrap();
+      await updateEntry({ id, status: "done", _date: date }).unwrap();
       toast.success("Task completed");
     } catch (error) {
       toast.error("Failed to complete task");
@@ -128,7 +139,7 @@ export function TodayFocus({ entries }: TodayFocusProps) {
   const handleUnblock = async (id: string) => {
     setProcessingId(id);
     try {
-      await updateEntry({ id, status: "open", _date: formatDate(new Date()) }).unwrap();
+      await updateEntry({ id, status: "open", _date: date }).unwrap();
       toast.success("Task unblocked");
     } catch (error) {
       toast.error("Failed to unblock task");
@@ -138,12 +149,11 @@ export function TodayFocus({ entries }: TodayFocusProps) {
   };
 
   const handleMigrate = async (id: string) => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const targetDate = getMigrateTargetDate(date);
     setProcessingId(id);
     try {
-      await migrateEntries({ entryIds: [id], targetDate: formatDate(tomorrow) }).unwrap();
-      toast.success("Migrated to tomorrow");
+      const result = await migrateEntries({ entryIds: [id], targetDate }).unwrap();
+      toast.success(`Migrated to ${result.targetDate}`);
     } catch (error) {
       toast.error("Failed to migrate");
     } finally {
@@ -157,7 +167,7 @@ export function TodayFocus({ entries }: TodayFocusProps) {
       // Unblock all blocked tasks in parallel
       await Promise.all(
         blocked.map(task => 
-          updateEntry({ id: task.id, status: "open", _date: formatDate(new Date()) }).unwrap()
+          updateEntry({ id: task.id, status: "open", _date: date }).unwrap()
         )
       );
       toast.success(`Unblocked ${blocked.length} task${blocked.length > 1 ? 's' : ''}`);

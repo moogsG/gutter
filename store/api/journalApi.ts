@@ -32,6 +32,9 @@ export const journalApi = createApi({
           signifier: body.signifier,
           text: body.text,
           status: "open",
+          lane: (body as JournalEntry).lane || null,
+          priority: (body as JournalEntry).priority || null,
+          waiting_on: (body as JournalEntry).waiting_on || null,
           tags: body.tags || [],
           parent_id: body.parent_id || null,
           sort_order: 9999,
@@ -80,7 +83,6 @@ export const journalApi = createApi({
         if (_date) {
           const patchResult = dispatch(
             journalApi.util.updateQueryData("getEntries", _date, (draft) => {
-              // Search top-level and children
               for (const entry of draft) {
                 if (entry.id === id) {
                   Object.assign(entry, patch, { updated_at: new Date().toISOString() });
@@ -99,12 +101,19 @@ export const journalApi = createApi({
 
         try {
           await queryFulfilled;
+          if (_date) {
+            dispatch(journalApi.util.invalidateTags([{ type: "JournalDay", id: _date }]));
+          }
         } catch {
           undos.forEach((p) => p.undo());
         }
       },
-      invalidatesTags: (result, error, { collection_id }) =>
-        collection_id !== undefined ? ["Collections"] : [],
+      invalidatesTags: (result, error, { _date, collection_id }) => {
+        const tags: Array<{ type: "JournalDay"; id: string } | "Collections" | "JournalMonth"> = ["JournalMonth"];
+        if (_date) tags.push({ type: "JournalDay", id: _date });
+        if (collection_id !== undefined) tags.push("Collections");
+        return tags;
+      },
     }),
     deleteEntry: builder.mutation<void, { id: string; hard?: boolean; _date?: string }>({
       query: ({ id, hard }) => ({
@@ -117,7 +126,6 @@ export const journalApi = createApi({
         if (_date) {
           const patchResult = dispatch(
             journalApi.util.updateQueryData("getEntries", _date, (draft) => {
-              // Check top-level
               const idx = draft.findIndex((e) => e.id === id);
               if (idx !== -1) {
                 if (hard) {
@@ -127,7 +135,6 @@ export const journalApi = createApi({
                 }
                 return;
               }
-              // Check children
               for (const entry of draft) {
                 if (!entry.children) continue;
                 const cIdx = entry.children.findIndex((c) => c.id === id);
@@ -147,13 +154,24 @@ export const journalApi = createApi({
 
         try {
           await queryFulfilled;
+          if (_date) {
+            dispatch(journalApi.util.invalidateTags([{ type: "JournalDay", id: _date }]));
+          }
         } catch {
           undos.forEach((p) => p.undo());
         }
       },
+      invalidatesTags: (result, error, { _date }) =>
+        _date ? [{ type: "JournalDay", id: _date }] : [],
     }),
     migrateEntries: builder.mutation<
-      { success: boolean; count: number },
+      {
+        success: boolean;
+        targetDate: string;
+        requestedCount: number;
+        migratedCount: number;
+        skippedCount: number;
+      },
       { entryIds: string[]; targetDate: string }
     >({
       query: (body) => ({
