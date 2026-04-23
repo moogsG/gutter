@@ -21,7 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LayoutGrid, Save, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { GridEditorTile } from "./GridEditorTile";
-import { COL_SPAN_CLASSES, ROW_SPAN_CLASSES } from "./grid-layout";
+import { COL_SPAN_CLASSES, HEIGHT_MODE_PREVIEW_CLASSES, type HeightMode } from "./grid-layout";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ interface DraftItem {
   sourceType: string;
   active: boolean;
   colSpan: 2 | 4 | 8;
-  rowSpan: 1 | 2;
+  heightMode: HeightMode;
   /** Full parsed ui_config so we preserve display settings on save */
   fullConfig: Record<string, unknown>;
 }
@@ -58,14 +58,28 @@ function parseFullConfig(raw: string | null): Record<string, unknown> {
 
 function extractLayoutFromConfig(cfg: Record<string, unknown>): {
   colSpan: 2 | 4 | 8;
-  rowSpan: 1 | 2;
+  heightMode: HeightMode;
   order: number;
 } {
   const cs = cfg.colSpan;
-  const rs = cfg.rowSpan;
+  const colSpan = cs === 2 || cs === 4 || cs === 8 ? cs : 8;
+
+  // Resolve heightMode — strict slot model; all legacy fuzzy modes map to "single".
+  const hm = cfg.heightMode;
+  let heightMode: HeightMode = "single";
+  if (hm === "single" || hm === "double") {
+    heightMode = hm;
+  } else if (hm === "auto" || hm === "tall" || hm === "scroll" || hm === "match-row") {
+    // Backward compat: old fuzzy modes → single-slot
+    heightMode = "single";
+  } else if (cfg.rowSpan === 2) {
+    // Backward compat: legacy rowSpan:2 → double-slot
+    heightMode = "double";
+  }
+
   return {
-    colSpan: cs === 2 || cs === 4 || cs === 8 ? cs : 8,
-    rowSpan: rs === 1 || rs === 2 ? rs : 1,
+    colSpan,
+    heightMode,
     order: typeof cfg.order === "number" ? cfg.order : 0,
   };
 }
@@ -84,7 +98,7 @@ function promptsToDraft(prompts: LayoutGridEditorPrompt[]): DraftItem[] {
       sourceType: p.source_type,
       active: p.active === 1,
       colSpan: layout.colSpan,
-      rowSpan: layout.rowSpan,
+      heightMode: layout.heightMode,
       fullConfig: cfg,
     }));
 }
@@ -117,8 +131,8 @@ export function LayoutGridEditor({ prompts, onSaved }: LayoutGridEditorProps) {
     setIsDirty(true);
   }, []);
 
-  const updateRowSpan = useCallback((id: string, v: 1 | 2) => {
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, rowSpan: v } : i)));
+  const updateHeightMode = useCallback((id: string, v: HeightMode) => {
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, heightMode: v } : i)));
     setIsDirty(true);
   }, []);
 
@@ -130,13 +144,16 @@ export function LayoutGridEditor({ prompts, onSaved }: LayoutGridEditorProps) {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Parallel PATCH for every prompt: merge layout fields into full ui_config
+      // Parallel PATCH for every prompt: merge layout fields into full ui_config.
+      // heightMode is the source of truth; rowSpan is written for legacy compat.
       await Promise.all(
         items.map((item, idx) => {
           const mergedConfig = {
             ...item.fullConfig,
             colSpan: item.colSpan,
-            rowSpan: item.rowSpan,
+            heightMode: item.heightMode,
+            // Legacy field: double-slot maps to rowSpan:2; single-slot uses 1.
+            rowSpan: item.heightMode === "double" ? 2 : 1,
             order: idx,
           };
           return fetch("/api/morning-view/prompts", {
@@ -144,7 +161,7 @@ export function LayoutGridEditor({ prompts, onSaved }: LayoutGridEditorProps) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               id: item.id,
-              sort_order: idx,   // keep list order in sync
+              sort_order: idx,
               uiConfig: mergedConfig,
             }),
           });
@@ -171,7 +188,7 @@ export function LayoutGridEditor({ prompts, onSaved }: LayoutGridEditorProps) {
             <div>
               <CardTitle className="text-base">Layout Editor</CardTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Drag tiles to reorder · W buttons set width · H buttons set height
+                Drag tiles to reorder · W = width · H = height slot (1×=256px / 2×=512px on desktop)
               </p>
             </div>
           </div>
@@ -198,8 +215,15 @@ export function LayoutGridEditor({ prompts, onSaved }: LayoutGridEditorProps) {
           onDragEnd={handleDragEnd}
         >
           <SortableContext items={items.map((i) => i.id)} strategy={rectSortingStrategy}>
-            {/* 8-column grid mirrors the actual morning view layout */}
-            <div className="grid grid-cols-8 gap-3 auto-rows-fr">
+            {/*
+              8-column grid — mirrors the real MorningView board exactly:
+                grid-cols-8      same column count
+                auto-rows-auto   rows size to content, not equal-fraction heights
+                items-start      cells top-align so single/double slots don't stretch each other
+              Previously used auto-rows-fr which forced all rows to the same height,
+              hiding the visual difference between 1-slot and 2-slot tiles.
+            */}
+            <div className="grid grid-cols-8 gap-3 auto-rows-auto items-start">
               {items.map((item) => (
                 <GridEditorTile
                   key={item.id}
@@ -208,11 +232,11 @@ export function LayoutGridEditor({ prompts, onSaved }: LayoutGridEditorProps) {
                   sourceType={item.sourceType}
                   active={item.active}
                   colSpan={item.colSpan}
-                  rowSpan={item.rowSpan}
+                  heightMode={item.heightMode}
                   colSpanClass={COL_SPAN_CLASSES[item.colSpan]}
-                  rowSpanClass={ROW_SPAN_CLASSES[item.rowSpan]}
+                  heightModeClass={HEIGHT_MODE_PREVIEW_CLASSES[item.heightMode]}
                   onColSpanChange={(v) => updateColSpan(item.id, v)}
-                  onRowSpanChange={(v) => updateRowSpan(item.id, v)}
+                  onHeightModeChange={(v) => updateHeightMode(item.id, v)}
                 />
               ))}
             </div>

@@ -20,6 +20,14 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Localhost bypass — skip auth for direct local requests
+  const forwarded = req.headers.get("x-forwarded-for");
+  const clientIp = forwarded ? forwarded.split(",")[0].trim() : undefined;
+  const host = req.headers.get("host") ?? "";
+  if (clientIp === "127.0.0.1" || clientIp === "::1" || host.startsWith("localhost") || host.startsWith("127.0.0.1") || host.startsWith("[::1]") || host.startsWith("::1")) {
+    return NextResponse.next();
+  }
+
   // Check session cookie
   const session = req.cookies.get("gutter-session");
 

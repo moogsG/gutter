@@ -5,9 +5,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronLeft, ChevronRight, Calendar, Palette, Menu, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Palette, Menu, Search, Sparkles, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -18,6 +20,8 @@ interface JournalHeaderProps {
   onPrevDay: () => void;
   onNextDay: () => void;
   onToday: () => void;
+  captureOpen?: boolean;
+  onCaptureChange?: (open: boolean) => void;
 }
 
 const themes = [
@@ -29,13 +33,14 @@ const themes = [
 ];
 
 const navLinks = [
-  { href: "/", label: "Daily" },
+  { href: "/", label: "Today" },
   { href: "/month", label: "Monthly" },
   { href: "/future", label: "Future" },
   { href: "/collections", label: "Collections" },
+  { href: "/kanban", label: "Kanban" },
 ];
 
-export function JournalHeader({ date, onPrevDay, onNextDay, onToday }: JournalHeaderProps) {
+export function JournalHeader({ date, onPrevDay, onNextDay, onToday, captureOpen, onCaptureChange }: JournalHeaderProps) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -102,7 +107,8 @@ export function JournalHeader({ date, onPrevDay, onNextDay, onToday }: JournalHe
                 <Menu className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuLabel>Navigate</DropdownMenuLabel>
               {navLinks.map((link) => (
                 <DropdownMenuItem key={link.href} asChild>
                   <Link
@@ -117,8 +123,40 @@ export function JournalHeader({ date, onPrevDay, onNextDay, onToday }: JournalHe
                   </Link>
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Settings</DropdownMenuLabel>
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/settings/morning-view"
+                  className={cn(
+                    "w-full flex items-center gap-2",
+                    pathname === "/settings/morning-view" && "bg-primary/10 text-primary font-medium"
+                  )}
+                  onClick={() => setMobileNavOpen(false)}
+                >
+                  <Settings2 className="w-4 h-4" />
+                  Today Focus
+                </Link>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Capture button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(
+              "h-8 px-3 gap-2",
+              "bg-gradient-to-r from-primary/10 to-primary/5",
+              "border-primary/20 hover:border-primary/30",
+              "hover:from-primary/15 hover:to-primary/10",
+              "transition-all duration-200"
+            )}
+            onClick={() => onCaptureChange?.(true)}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Capture</span>
+          </Button>
 
           {/* Omni bar trigger */}
           <Button

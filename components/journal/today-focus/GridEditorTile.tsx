@@ -4,7 +4,8 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Settings2, Calendar, ListChecks, Cloud, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { COL_SPAN_CLASSES } from "./grid-layout";
+import type { HeightMode } from "./grid-layout";
+import { HEIGHT_MODE_LABELS } from "./grid-layout";
 
 // Icon map matches source_type values
 const SOURCE_ICONS: Record<string, React.ElementType> = {
@@ -22,9 +23,9 @@ const COL_BTNS: Array<{ v: 2 | 4 | 8; label: string; title: string }> = [
   { v: 8, label: "■", title: "Full width" },
 ];
 
-const ROW_BTNS: Array<{ v: 1 | 2; label: string; title: string }> = [
-  { v: 1, label: "1×", title: "Normal height" },
-  { v: 2, label: "2×", title: "Tall – double height" },
+const HEIGHT_BTNS: Array<{ v: HeightMode; label: string; title: string }> = [
+  { v: "single", label: "1×", title: HEIGHT_MODE_LABELS.single },
+  { v: "double", label: "2×", title: HEIGHT_MODE_LABELS.double },
 ];
 
 export interface GridEditorTileProps {
@@ -33,13 +34,18 @@ export interface GridEditorTileProps {
   sourceType: string;
   active: boolean;
   colSpan: 2 | 4 | 8;
-  rowSpan: 1 | 2;
+  heightMode: HeightMode;
   /** Pre-computed Tailwind col-span class string from COL_SPAN_CLASSES */
   colSpanClass: string;
-  /** Pre-computed Tailwind row-span class string from ROW_SPAN_CLASSES */
-  rowSpanClass: string;
+  /**
+   * Pre-computed preview height class string from HEIGHT_MODE_PREVIEW_CLASSES.
+   * Applies the same fixed desktop height as the real Today Focus board
+   * (md:h-64 for single / md:h-[32rem] for double) so the editor tile
+   * matches the actual on-board footprint.
+   */
+  heightModeClass: string;
   onColSpanChange: (v: 2 | 4 | 8) => void;
-  onRowSpanChange: (v: 1 | 2) => void;
+  onHeightModeChange: (v: HeightMode) => void;
 }
 
 export function GridEditorTile({
@@ -48,11 +54,11 @@ export function GridEditorTile({
   sourceType,
   active,
   colSpan,
-  rowSpan,
+  heightMode,
   colSpanClass,
-  rowSpanClass,
+  heightModeClass,
   onColSpanChange,
-  onRowSpanChange,
+  onHeightModeChange,
 }: GridEditorTileProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id });
@@ -71,7 +77,10 @@ export function GridEditorTile({
       style={dynamicStyle}
       className={cn(
         colSpanClass,
-        rowSpanClass,
+        // Apply the same fixed desktop height as the real Today Focus board.
+        // On mobile (< md) this has no effect — tile collapses to content height,
+        // matching the real board's mobile behaviour.
+        heightModeClass,
         "relative rounded-xl border-2 bg-card/80 backdrop-blur-sm p-3 select-none",
         "[transform:var(--dnd-t)] [transition:var(--dnd-tr)]",
         isDragging
@@ -122,19 +131,19 @@ export function GridEditorTile({
           ))}
         </div>
 
-        {/* Height presets */}
+        {/* Height slot presets (desktop-only — mobile always natural height) */}
         <div className="flex items-center gap-1">
           <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60 w-4 shrink-0">
             H
           </span>
-          {ROW_BTNS.map(({ v, label, title: ttl }) => (
+          {HEIGHT_BTNS.map(({ v, label, title: ttl }) => (
             <button
               key={v}
-              onClick={() => onRowSpanChange(v)}
+              onClick={() => onHeightModeChange(v)}
               title={ttl}
               className={cn(
                 "flex-1 rounded text-[10px] py-0.5 leading-tight font-medium transition-colors",
-                rowSpan === v
+                heightMode === v
                   ? "bg-primary/90 text-primary-foreground shadow-sm"
                   : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
               )}

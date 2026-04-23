@@ -72,7 +72,7 @@ function CalendarTimeline({ events, showCalendarNames }: { events: CalendarWidge
             <div className="w-2 h-2 rounded-full bg-primary ring-2 ring-primary/20 mt-1 shrink-0" />
             {idx < events.length - 1 && <div className="w-px flex-1 bg-primary/20 my-1" />}
           </div>
-          {/* content */}
+          {/* content — full-width, no hard max-w truncation */}
           <div className={cn("flex-1 min-w-0", idx < events.length - 1 ? "pb-3" : "")}>
             <div className="text-sm font-medium text-foreground leading-tight">{event.title}</div>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -80,9 +80,10 @@ function CalendarTimeline({ events, showCalendarNames }: { events: CalendarWidge
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-primary/30 text-primary/70">{event.calendar}</Badge>
               )}
               {event.location && (
-                <span className="inline-flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  <span className="truncate max-w-[140px]">{event.location}</span>
+                <span className="inline-flex items-center gap-1 min-w-0">
+                  <MapPin className="w-3 h-3 shrink-0" />
+                  {/* Let location use its natural width within the flex container */}
+                  <span className="break-words">{event.location}</span>
                 </span>
               )}
             </div>
@@ -109,8 +110,9 @@ function CalendarAgenda({ events, showCalendarNames }: { events: CalendarWidgetE
               <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 {event.location && (
                   <span className="inline-flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
-                    {event.location}
+                    <MapPin className="w-3 h-3 shrink-0" />
+                    {/* Full location text — wraps gracefully in the available column width */}
+                    <span>{event.location}</span>
                   </span>
                 )}
                 {showCalendarNames && event.calendar && (
@@ -155,9 +157,11 @@ export function CalendarTodayWidgetCard({ widget }: { widget: CalendarWidget }) 
         <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
           <Calendar className="w-3.5 h-3.5 text-primary" />
           {widget.title}
-          <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 font-normal normal-case tracking-normal">
-            {variant}
-          </Badge>
+          {widget.data.totalEvents > 0 && (
+            <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 font-normal normal-case tracking-normal">
+              {widget.data.totalEvents} event{widget.data.totalEvents !== 1 ? "s" : ""}
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -178,7 +182,7 @@ export function CalendarTodayWidgetCard({ widget }: { widget: CalendarWidget }) 
 
 // ─── Weather Widget ──────────────────────────────────────────────────────────
 
-/** Hero: full-size temperature-first card with prominent visuals */
+/** Hero: full-size temperature-first card with structured stat rows */
 function WeatherHero({ widget }: { widget: WeatherWidget }) {
   const d = widget.data;
   const hourlyCount = widget.uiConfig?.hourlyCount ?? 4;
@@ -188,34 +192,75 @@ function WeatherHero({ widget }: { widget: WeatherWidget }) {
   const hours = showHourly ? (d.hourly ?? []).slice(0, hourlyCount) : [];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-end gap-4">
-        <div>
-          <div className="text-6xl font-thin text-primary leading-none">{d.currentTemp}{sym}</div>
-          <div className="text-base text-foreground/80 mt-2 font-medium">{d.condition}</div>
+    <div className="flex flex-col gap-3">
+      {/* Primary: large temp + condition + high/low inline */}
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-5xl font-thin text-primary leading-none tabular-nums">
+            {d.currentTemp}{sym}
+          </div>
+          <div className="text-sm text-foreground/80 mt-1.5 font-medium leading-snug">
+            {d.condition}
+          </div>
         </div>
-        <div className="ml-auto text-right space-y-1 pb-1">
-          <div className="flex items-center justify-end gap-1.5 text-sm text-foreground/70">
-            <Thermometer className="w-3.5 h-3.5 text-primary" />
+        {/* High / Low / Rain stacked on the right */}
+        <div className="text-right space-y-1 pt-0.5">
+          <div className="flex items-center justify-end gap-1 text-xs">
+            <Thermometer className="w-3 h-3 text-primary/60" />
             <span className="font-semibold text-foreground">{d.high}{sym}</span>
-            <span className="text-muted-foreground">/ {d.low}{sym}</span>
+            <span className="text-muted-foreground">/</span>
+            <span className="text-muted-foreground">{d.low}{sym}</span>
           </div>
           {typeof d.rainChance === "number" && (
-            <div className="flex items-center justify-end gap-1.5 text-xs text-muted-foreground">
+            <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
               <Droplets className="w-3 h-3 text-accent" />
               <span>{d.rainChance}% rain</span>
             </div>
           )}
         </div>
       </div>
-      {widget.summary && <p className="text-sm text-foreground/80 leading-relaxed">{widget.summary}</p>}
+
+      {/* Summary line if available */}
+      {widget.summary && (
+        <p className="text-xs text-muted-foreground leading-relaxed border-t border-border/40 pt-2">
+          {widget.summary}
+        </p>
+      )}
+
+      {/* Daily stats pill row — always shown, gives structure even without hourly */}
+      <div className="grid grid-cols-3 gap-1.5">
+        <div className="rounded-lg border border-border/50 bg-primary/5 px-2 py-2 text-center">
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">High</div>
+          <div className="text-sm font-semibold text-foreground tabular-nums">{d.high}{sym}</div>
+        </div>
+        <div className="rounded-lg border border-border/50 bg-primary/5 px-2 py-2 text-center">
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Low</div>
+          <div className="text-sm font-semibold text-foreground tabular-nums">{d.low}{sym}</div>
+        </div>
+        <div className="rounded-lg border border-border/50 bg-primary/5 px-2 py-2 text-center">
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Rain</div>
+          <div className="text-sm font-semibold text-foreground tabular-nums">
+            {typeof d.rainChance === "number" ? `${d.rainChance}%` : "—"}
+          </div>
+        </div>
+      </div>
+
+      {/* Hourly forecast slots */}
       {hours.length > 0 && (
-        <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${hours.length}, 1fr)` }}>
+        <div
+          className="grid gap-1.5"
+          style={{ gridTemplateColumns: `repeat(${hours.length}, 1fr)` }}
+        >
           {hours.map((h) => (
-            <div key={h.time} className="rounded-lg border border-primary/15 bg-primary/5 px-2 py-2 text-center">
+            <div
+              key={h.time}
+              className="rounded-lg border border-primary/15 bg-card/80 px-1.5 py-2 text-center"
+            >
               <div className="text-[10px] text-muted-foreground">{h.time}</div>
-              <div className="text-sm font-semibold text-primary mt-1">{h.temperature}{sym}</div>
-              {typeof h.rainChance === "number" && (
+              <div className="text-xs font-semibold text-primary mt-1 tabular-nums">
+                {h.temperature}{sym}
+              </div>
+              {typeof h.rainChance === "number" && h.rainChance > 0 && (
                 <div className="text-[10px] text-accent mt-0.5">{h.rainChance}%</div>
               )}
             </div>

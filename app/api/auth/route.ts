@@ -1,15 +1,53 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { type NextRequest, NextResponse } from "next/server";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { logAuthFailure } from "@/lib/security-logger";
 
-// Store password hash instead of plaintext
-// In production, this should be in a database
-// For setup: use bcrypt.hashSync("your-password", 10) to generate hash
-const AUTH_PASSWORD_HASH = process.env.AUTH_PASSWORD_HASH || "";
-const SESSION_MAX_AGE =
-	parseInt(process.env.SESSION_MAX_AGE_DAYS || "30", 10) * 86400;
+function readEnvFileValue(key: string): string {
+	try {
+		const envPath = join(process.cwd(), ".env");
+		const envContent = readFileSync(envPath, "utf8");
+		const line = envContent
+			.split(/\r?\n/)
+			.find((entry) => entry.startsWith(`${key}=`));
+
+		if (!line) return "";
+		return line.slice(key.length + 1).trim();
+	} catch {
+		return "";
+	}
+}
+
+function looksLikeBcryptHash(value: string): boolean {
+	return /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(value);
+}
+
+function getAuthPasswordHash(): string {
+	const envValue = process.env.AUTH_PASSWORD_HASH || "";
+	const fileValue = readEnvFileValue("AUTH_PASSWORD_HASH");
+
+	if (looksLikeBcryptHash(fileValue)) {
+		return fileValue;
+	}
+
+	if (looksLikeBcryptHash(envValue)) {
+		return envValue;
+	}
+
+	return fileValue || envValue;
+}
+
+function getSessionMaxAge(): number {
+	const rawValue =
+		process.env.SESSION_MAX_AGE_DAYS ||
+		readEnvFileValue("SESSION_MAX_AGE_DAYS") ||
+		"30";
+
+	return parseInt(rawValue, 10) * 86400;
+}
 
 // Simple in-memory session store (use Redis in production with multiple instances)
 const activeSessions = new Set<string>();
@@ -58,7 +96,10 @@ export async function POST(req: NextRequest) {
 	try {
 		const { password } = await req.json();
 
-		if (!AUTH_PASSWORD_HASH) {
+		const authPasswordHash = getAuthPasswordHash();
+		const sessionMaxAge = getSessionMaxAge();
+
+		if (!authPasswordHash) {
 			return NextResponse.json(
 				{ error: "Auth not configured" },
 				{ status: 500 },
@@ -66,7 +107,7 @@ export async function POST(req: NextRequest) {
 		}
 
 		// Use bcrypt to compare password with hash
-		const isValid = await bcrypt.compare(password, AUTH_PASSWORD_HASH);
+		const isValid = await bcrypt.compare(password, authPasswordHash);
 
 		if (!isValid) {
 			// Log authentication failure
@@ -81,7 +122,7 @@ export async function POST(req: NextRequest) {
 			httpOnly: true,
 			secure: process.env.NODE_ENV === "production",
 			sameSite: "lax",
-			maxAge: SESSION_MAX_AGE,
+			maxAge: sessionMaxAge,
 			path: "/",
 		});
 
@@ -89,6 +130,24 @@ export async function POST(req: NextRequest) {
 	} catch {
 		return NextResponse.json({ error: "Invalid request" }, { status: 400 });
 	}
+}
+
+// GET: temporary debug for auth source inspection
+export async function GET() {
+	const authPasswordHash = getAuthPasswordHash();
+	const envPasswordHash = process.env.AUTH_PASSWORD_HASH || "";
+	const filePasswordHash = readEnvFileValue("AUTH_PASSWORD_HASH");
+
+	return NextResponse.json({
+		envHashPreview: envPasswordHash.slice(0, 12),
+		fileHashPreview: filePasswordHash.slice(0, 12),
+		resolvedHashPreview: authPasswordHash.slice(0, 12),
+		matchesEnv: authPasswordHash === envPasswordHash,
+		matchesFile: authPasswordHash === filePasswordHash,
+		envLooksValid: looksLikeBcryptHash(envPasswordHash),
+		fileLooksValid: looksLikeBcryptHash(filePasswordHash),
+		resolvedLooksValid: looksLikeBcryptHash(authPasswordHash),
+	});
 }
 
 // DELETE: logout

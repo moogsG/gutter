@@ -25,7 +25,10 @@ export function KanbanColumn({
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
 
-  const taskIds = tasks.map((t) => t.id);
+  const safeTasks = tasks.filter(
+    (task): task is Task => Boolean(task) && typeof task === "object" && typeof task.id === "string" && task.id.length > 0
+  );
+  const taskIds = safeTasks.map((t) => t.id);
 
   return (
     <div className="flex flex-col min-w-0 flex-1">
@@ -56,12 +59,12 @@ export function KanbanColumn({
         )}
       >
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-          {tasks.map((task) => (
+          {safeTasks.map((task) => (
             <KanbanCard key={task.id} task={task} />
           ))}
         </SortableContext>
 
-        {tasks.length === 0 && (
+        {safeTasks.length === 0 && (
           <div className="flex items-center justify-center h-full min-h-[120px]">
             <p className="text-xs text-muted-foreground/40 select-none">
               Drop tasks here

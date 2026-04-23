@@ -18,6 +18,7 @@ import {
   Clock,
   Kanban,
   Keyboard,
+  Settings2,
 } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
@@ -39,6 +40,7 @@ const NAV_ITEMS = [
   { id: "collections", label: "Collections", href: "/collections", icon: BookOpen, keywords: ["collections", "lists", "groups"] },
   { id: "kanban", label: "Kanban", href: "/kanban", icon: Kanban, keywords: ["kanban", "board", "tasks", "status", "todo", "in progress", "blocked", "done"] },
   { id: "migrate", label: "Migrate Entries", href: "/migrate", icon: ArrowRight, keywords: ["migrate", "move", "transfer", "unresolved"] },
+  { id: "morning-view-settings", label: "Morning View Settings", href: "/settings/morning-view", icon: Settings2, keywords: ["settings", "morning view", "prompts", "configure", "morning settings"] },
   { id: "help", label: "Keyboard Shortcuts", href: "", icon: Keyboard, keywords: ["help", "shortcuts", "keyboard", "?", "hotkeys", "commands"] },
 ];
 

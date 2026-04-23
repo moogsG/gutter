@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 		const db = getDb();
 		const entries = db
 			.prepare(
-				`SELECT id, date, signifier, text, status, migrated_to, migrated_from, 
+				`SELECT id, date, signifier, text, status, lane, priority, waiting_on, migrated_to, migrated_from, 
                 collection_id, parent_id, tags, sort_order, created_at, updated_at 
          FROM journal_entries 
          WHERE date = ? 
@@ -42,8 +42,9 @@ export async function GET(req: NextRequest) {
 			.all(date) as JournalEntry[];
 
 		// Parse tags JSON
-		const parsed = entries.map((e) => ({
+		const parsed = entries.map((e, index) => ({
 			...e,
+			id: e.id || `legacy-${date}-${index}`,
 			tags: e.tags ? JSON.parse(e.tags as unknown as string) : [],
 			children: [] as JournalEntry[],
 		}));
@@ -75,8 +76,12 @@ export async function POST(req: NextRequest) {
 	if (limited) return limited;
 
 	try {
-		const body: NewEntry = await req.json();
-		const { date, signifier, text, tags = [], parent_id } = body;
+		const body: NewEntry & {
+			lane?: "work" | "personal" | "family" | "jw" | "petalz";
+			priority?: "low" | "normal" | "high";
+			waiting_on?: string;
+		} = await req.json();
+		const { date, signifier, text, tags = [], parent_id, lane, priority, waiting_on } = body;
 
 		if (!date || !signifier || !text) {
 			return handleValidationError("Missing required fields");
@@ -130,13 +135,16 @@ export async function POST(req: NextRequest) {
 
 		db.prepare(
 			`INSERT INTO journal_entries 
-       (id, date, signifier, text, status, tags, sort_order, parent_id, created_at, updated_at) 
-       VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`,
+       (id, date, signifier, text, status, lane, priority, waiting_on, tags, sort_order, parent_id, created_at, updated_at) 
+       VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?)`,
 		).run(
 			id,
 			date,
 			signifier,
 			sanitizedText,
+			lane || null,
+			priority || null,
+			waiting_on?.trim() || null,
 			JSON.stringify(sanitizedTags),
 			sortOrder,
 			parent_id || null,

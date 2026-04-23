@@ -105,6 +105,9 @@ export function MorningViewSettings() {
           promptText: formData.prompt_text,
           sourceType: formData.source_type,
           frequency: formData.frequency,
+          sourceConfig: formData.source_type === "weather"
+            ? JSON.stringify({ location: ((formData.uiConfig.location as string) || "Tulum").trim() || "Tulum" })
+            : null,
           // All prompts get layout config; widget prompts also get display config
           uiConfig: withLayoutDefaults(
             hasWidgetConfig(formData.source_type)
@@ -133,6 +136,17 @@ export function MorningViewSettings() {
     let parsedUiConfig: UiConfigState = {};
     if (prompt.ui_config) {
       try { parsedUiConfig = JSON.parse(prompt.ui_config); } catch { /* ignore */ }
+    }
+    if (prompt.source_type === "weather" && prompt.source_config) {
+      try {
+        const parsedSourceConfig = JSON.parse(prompt.source_config);
+        parsedUiConfig = {
+          ...parsedUiConfig,
+          ...(parsedSourceConfig?.location ? { location: parsedSourceConfig.location } : {}),
+        };
+      } catch {
+        /* ignore */
+      }
     }
     setFormData({
       title: prompt.title,
@@ -165,6 +179,9 @@ export function MorningViewSettings() {
           prompt_text: formData.prompt_text,
           source_type: formData.source_type,
           frequency: formData.frequency,
+          source_config: formData.source_type === "weather"
+            ? JSON.stringify({ location: ((formData.uiConfig.location as string) || "Tulum").trim() || "Tulum" })
+            : null,
           uiConfig: withLayoutDefaults(
             hasWidgetConfig(formData.source_type)
               ? { ...defaultUiConfig(formData.source_type), ...formData.uiConfig }

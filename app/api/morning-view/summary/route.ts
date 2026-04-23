@@ -1,40 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-
-// ─── In-memory cache ────────────────────────────────────────────────────────
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+import {
+  makeCacheKey,
+  getFromCache,
+  setCache,
+  getCacheStatus,
+  initBackgroundScheduler,
+} from "@/lib/today-focus-cache";
 
 interface SummaryResponse {
   results: PromptResult[];
   totalPrompts: number;
   ranPrompts: number;
-}
-
-interface CacheEntry {
-  data: SummaryResponse;
-  cachedAt: number;
-}
-
-const summaryCache = new Map<string, CacheEntry>();
-
-function makeCacheKey(date: string): string {
-  return `summary:${date}`;
-}
-
-function getFromCache(key: string): CacheEntry | null {
-  const entry = summaryCache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.cachedAt > CACHE_TTL_MS) {
-    summaryCache.delete(key);
-    return null;
-  }
-  return entry;
-}
-
-function setCache(key: string, data: SummaryResponse): void {
-  // Evict old entries if cache grows large
-  if (summaryCache.size > 20) summaryCache.clear();
-  summaryCache.set(key, { data, cachedAt: Date.now() });
 }
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { generateCompletion } from "@/lib/llm-router";
@@ -88,7 +65,7 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
 }
 
 interface JournalSummaryRow {
-  id: string;
+  id: string | null;
   date: string;
   text: string;
   signifier: string;
@@ -222,9 +199,13 @@ function shouldRunToday(prompt: MorningViewPrompt): boolean {
   }
 }
 
-function toUnresolvedTaskItem(entry: JournalSummaryRow): UnresolvedTaskItem {
+function getStableTaskId(entry: Pick<JournalSummaryRow, "id" | "date" | "text" | "status">, index = 0): string {
+  return entry.id ?? `${entry.date}:${entry.status}:${entry.text}:${index}`;
+}
+
+function toUnresolvedTaskItem(entry: JournalSummaryRow, index = 0): UnresolvedTaskItem {
   return {
-    id: entry.id,
+    id: getStableTaskId(entry, index),
     text: entry.text,
     status: entry.status as UnresolvedTaskItem["status"],
     priority: entry.priority ?? undefined,
@@ -268,9 +249,9 @@ async function buildJournalUnresolvedWidget(prompt: MorningViewPrompt): Promise<
     LIMIT ?
   `).all(fetchLimit) as JournalSummaryRow[];
 
-  const blocked = unresolved.filter((entry) => entry.status === "blocked").slice(0, maxPer).map(toUnresolvedTaskItem);
-  const inProgress = unresolved.filter((entry) => entry.status === "in-progress").slice(0, maxPer).map(toUnresolvedTaskItem);
-  const topOpen = unresolved.filter((entry) => entry.status === "open").slice(0, maxPer).map(toUnresolvedTaskItem);
+  const blocked = unresolved.filter((entry) => entry.status === "blocked").slice(0, maxPer).map((entry, index) => toUnresolvedTaskItem(entry, index));
+  const inProgress = unresolved.filter((entry) => entry.status === "in-progress").slice(0, maxPer).map((entry, index) => toUnresolvedTaskItem(entry, index));
+  const topOpen = unresolved.filter((entry) => entry.status === "open").slice(0, maxPer).map((entry, index) => toUnresolvedTaskItem(entry, index));
 
   return {
     id: prompt.id,
@@ -299,30 +280,46 @@ async function buildCalendarTodayWidget(prompt: MorningViewPrompt): Promise<Cale
   });
   const maxItems = uiCfg.maxItems ?? 5;
 
-  const { getTodayEvents } = await import("@/lib/calendar");
-  const events = await getTodayEvents();
-  const sortedEvents = [...events].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+  try {
+    const { getTodayEvents } = await import("@/lib/calendar");
+    const events = await getTodayEvents();
+    const sortedEvents = [...events].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
 
-  return {
-    id: prompt.id,
-    type: "calendar_today",
-    title: prompt.title,
-    state: sortedEvents.length > 0 ? "ready" : "empty",
-    data: {
-      totalEvents: sortedEvents.length,
-      nextEventStart: sortedEvents[0]?.startDate,
-      events: sortedEvents.slice(0, maxItems).map((event) => ({
-        id: event.id,
-        title: event.summary,
-        startDate: event.startDate,
-        endDate: event.endDate,
-        allDay: event.allDay,
-        location: event.location,
-        calendar: event.calendar,
-      })),
-    },
-    uiConfig: uiCfg,
-  };
+    return {
+      id: prompt.id,
+      type: "calendar_today",
+      title: prompt.title,
+      state: sortedEvents.length > 0 ? "ready" : "empty",
+      data: {
+        totalEvents: sortedEvents.length,
+        nextEventStart: sortedEvents[0]?.startDate,
+        events: sortedEvents.slice(0, maxItems).map((event) => ({
+          id: event.id,
+          title: event.summary,
+          startDate: event.startDate,
+          endDate: event.endDate,
+          allDay: event.allDay,
+          location: event.location,
+          calendar: event.calendar,
+        })),
+      },
+      uiConfig: uiCfg,
+    };
+  } catch (error) {
+    console.error("Calendar widget error:", error);
+    return {
+      id: prompt.id,
+      type: "calendar_today",
+      title: prompt.title,
+      state: "error",
+      error: error instanceof Error ? error.message : "Calendar unavailable",
+      data: {
+        totalEvents: 0,
+        events: [],
+      },
+      uiConfig: uiCfg,
+    };
+  }
 }
 
 function fToC(f: number): number {
@@ -335,12 +332,25 @@ async function buildWeatherWidget(prompt: MorningViewPrompt): Promise<WeatherWid
     showHourly: true,
     hourlyCount: 4,
     unit: "C" as const,
+    location: "Tulum",
   });
   const hourlyCount = uiCfg.hourlyCount ?? 4;
   const unit = uiCfg.unit ?? "C";
 
+  let location = (uiCfg.location ?? "").trim();
+  if (!location && prompt.source_config) {
+    try {
+      const parsed = JSON.parse(prompt.source_config);
+      location = typeof parsed?.location === "string" ? parsed.location.trim() : "";
+    } catch {
+      /* ignore */
+    }
+  }
+  const weatherLocation = location || "Tulum";
+  const weatherUrl = `https://wttr.in/${encodeURIComponent(weatherLocation)}?format=j1`;
+
   const response = await withTimeout(
-    fetch("https://wttr.in/?format=j1"),
+    fetch(weatherUrl),
     5000,
     "Weather request"
   );
@@ -362,6 +372,7 @@ async function buildWeatherWidget(prompt: MorningViewPrompt): Promise<WeatherWid
     id: prompt.id,
     type: "weather",
     title: prompt.title,
+    subtitle: weatherLocation,
     state: current && today ? "ready" : "empty",
     data: {
       currentTemp: norm(Number(current?.temp_F ?? 0)),
@@ -389,6 +400,11 @@ async function buildWeatherWidget(prompt: MorningViewPrompt): Promise<WeatherWid
   };
 }
 
+function isClosedJiraStatus(status: string): boolean {
+  const normalized = status.trim().toLowerCase();
+  return ["done", "cancelled", "canceled", "closed"].includes(normalized);
+}
+
 async function buildJiraWidget(prompt: MorningViewPrompt): Promise<JiraWidget> {
   const uiCfg = parseUiConfig(prompt.ui_config, {
     variant: "grouped" as const,
@@ -414,7 +430,9 @@ async function buildJiraWidget(prompt: MorningViewPrompt): Promise<JiraWidget> {
     return 3;
   }
 
-  const sorted = [...rawIssues].sort((a, b) => {
+  const visibleIssues = rawIssues.filter((issue) => !isClosedJiraStatus(issue.status));
+
+  const sorted = [...visibleIssues].sort((a, b) => {
     const byPriority = jiraPriorityRankLocal(a.priority) - jiraPriorityRankLocal(b.priority);
     if (byPriority !== 0) return byPriority;
     return new Date(b.updated).getTime() - new Date(a.updated).getTime();
@@ -492,9 +510,9 @@ async function buildDoNextWidget(prompt: MorningViewPrompt): Promise<DoNextWidge
     LIMIT 20
   `).all() as JournalSummaryRow[];
 
-  function toDoNextItem(row: JournalSummaryRow): DoNextItem {
+  function toDoNextItem(row: JournalSummaryRow, index = 0): DoNextItem {
     return {
-      id: row.id,
+      id: getStableTaskId(row, index),
       text: row.text,
       status: row.status as "open" | "in-progress",
       priority: row.priority ?? undefined,
@@ -502,8 +520,8 @@ async function buildDoNextWidget(prompt: MorningViewPrompt): Promise<DoNextWidge
     };
   }
 
-  const inProgress = rows.filter((r) => r.status === "in-progress").slice(0, uiCfg.maxInProgress ?? 3).map(toDoNextItem);
-  const topOpen = rows.filter((r) => r.status === "open").slice(0, uiCfg.maxOpen ?? 3).map(toDoNextItem);
+  const inProgress = rows.filter((r) => r.status === "in-progress").slice(0, uiCfg.maxInProgress ?? 3).map((row, index) => toDoNextItem(row, index));
+  const topOpen = rows.filter((r) => r.status === "open").slice(0, uiCfg.maxOpen ?? 3).map((row, index) => toDoNextItem(row, index));
 
   const allInProgress = rows.filter((r) => r.status === "in-progress");
   const allOpen = rows.filter((r) => r.status === "open");
@@ -679,7 +697,8 @@ async function executePrompt(prompt: MorningViewPrompt): Promise<{ content: stri
             5000,
             "Jira assigned issues"
           );
-          sourceData = buildJiraSummary(issues as JiraSummaryRow[]);
+          const visibleIssues = (issues as JiraSummaryRow[]).filter((issue) => !isClosedJiraStatus(issue.status));
+          sourceData = buildJiraSummary(visibleIssues);
         } catch (error) {
           console.error("Jira error:", error);
           sourceData = "Jira unavailable.";
@@ -733,12 +752,14 @@ export async function GET(req: NextRequest) {
 
     // Return cached result for non-force requests within TTL
     if (!force) {
-      const cached = getFromCache(cacheKey);
+      const cached = getFromCache<SummaryResponse>(cacheKey);
       if (cached) {
+        const status = getCacheStatus(cacheKey);
         return NextResponse.json({
           ...cached.data,
           cached: true,
-          cachedAt: new Date(cached.cachedAt).toISOString(),
+          cachedAt: status.cachedAt ?? new Date(cached.cachedAt).toISOString(),
+          nextRefreshAt: status.nextRefreshAt,
         });
       }
     }
@@ -757,9 +778,10 @@ export async function GET(req: NextRequest) {
 
     for (const prompt of promptsToRun) {
       try {
+        const timeoutMs = prompt.source_type === "calendar_today" ? 20000 : 12000;
         const result = await withTimeout(
           executePrompt(prompt),
-          12000,
+          timeoutMs,
           `Prompt ${prompt.id}`
         );
         results.push({
@@ -790,12 +812,14 @@ export async function GET(req: NextRequest) {
     };
 
     // Cache fresh results (always store, even after force=true refresh)
-    setCache(cacheKey, responseData);
+    setCache(cacheKey, responseData, today);
+    const status = getCacheStatus(cacheKey);
 
     return NextResponse.json({
       ...responseData,
       cached: false,
-      cachedAt: new Date().toISOString(),
+      cachedAt: status.cachedAt ?? new Date().toISOString(),
+      nextRefreshAt: status.nextRefreshAt,
     });
   } catch (error) {
     console.error("Error generating morning view summary:", error);
@@ -805,3 +829,70 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+// ─── Background Refresh ───────────────────────────────────────────────────────
+// Proactively warm the cache on a 30-minute cadence so dashboard loads are
+// instant instead of triggering a full rebuild on first request.
+//
+// Initialised once at module load (globalThis guard prevents duplicates across
+// Next.js hot reloads in dev).
+
+async function refreshTodaySummary(): Promise<void> {
+  const db = getDb();
+  const today = new Date().toISOString().split("T")[0];
+  const cacheKey = makeCacheKey(today);
+
+  // Snapshot previously-cached results before we start. On a per-prompt
+  // failure we fall back to the stale-but-good cached entry so the widget
+  // is never silently dropped from the board.
+  const previousCache = getFromCache<SummaryResponse>(cacheKey);
+  const previousById = new Map<string, PromptResult>(
+    (previousCache?.data.results ?? []).map((r) => [r.prompt.id, r])
+  );
+
+  const allPrompts = db.prepare(`
+    SELECT * FROM morning_view_prompts
+    WHERE active = 1
+    ORDER BY sort_order ASC
+  `).all() as MorningViewPrompt[];
+
+  const promptsToRun = allPrompts.filter(shouldRunToday);
+  const results: PromptResult[] = [];
+
+  for (const prompt of promptsToRun) {
+    try {
+      const timeoutMs = prompt.source_type === "calendar_today" ? 20000 : 12000;
+      const result = await withTimeout(
+        executePrompt(prompt),
+        timeoutMs,
+        `Background refresh: prompt ${prompt.id}`
+      );
+      results.push({ prompt, content: result.content, widget: result.widget });
+
+      db.prepare(`
+        UPDATE morning_view_prompts
+        SET last_run = datetime('now')
+        WHERE id = ?
+      `).run(prompt.id);
+    } catch (error) {
+      console.error(`[TodayFocusCache] Error refreshing prompt ${prompt.id}:`, error);
+      // Preserve the previously-cached result for this widget so it is not
+      // silently dropped from the board. If no prior data exists, push an
+      // explicit error entry so the widget card remains visible (showing an
+      // error state) rather than disappearing entirely.
+      const preserved = previousById.get(prompt.id);
+      results.push(preserved ?? { prompt, content: "", error: String(error) });
+    }
+  }
+
+  if (results.length > 0) {
+    const responseData: SummaryResponse = {
+      results,
+      totalPrompts: allPrompts.length,
+      ranPrompts: promptsToRun.length,
+    };
+    setCache(cacheKey, responseData, today);
+  }
+}
+
+initBackgroundScheduler(refreshTodaySummary);

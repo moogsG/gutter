@@ -75,6 +75,8 @@ export interface WeatherWidgetUiConfig {
   hourlyCount?: number;
   /** Temperature unit — C or F. Default: C */
   unit?: WeatherUnit;
+  /** Explicit weather location, e.g. "Tulum" or "Tulum, Quintana Roo" */
+  location?: string;
 }
 
 export type WeatherWidget = TodayFocusWidgetBase<"weather", WeatherWidgetData, WeatherWidgetUiConfig>;

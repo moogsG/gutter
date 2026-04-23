@@ -22,18 +22,18 @@ export function hasWidgetConfig(sourceType: string): boolean {
 export function defaultUiConfig(sourceType: string): UiConfigState {
   switch (sourceType) {
     case "calendar_today":
-      return { variant: "timeline", maxItems: 5, showCalendarNames: true, colSpan: 8, rowSpan: 1, order: 0 };
+      return { variant: "timeline", maxItems: 5, showCalendarNames: true, colSpan: 8, heightMode: "single", order: 0 };
     case "weather":
-      return { variant: "hero", showHourly: true, hourlyCount: 4, unit: "C", colSpan: 8, rowSpan: 1, order: 0 };
+      return { variant: "hero", showHourly: true, hourlyCount: 4, unit: "C", location: "Tulum", colSpan: 8, heightMode: "single", order: 0 };
     case "journal_unresolved":
-      return { variant: "sections", maxItemsPerSection: 3, showLane: true, showWaitingOn: true, showInlineActions: false, colSpan: 8, rowSpan: 1, order: 0 };
+      return { variant: "sections", maxItemsPerSection: 3, showLane: true, showWaitingOn: true, showInlineActions: false, colSpan: 8, heightMode: "single", order: 0 };
     case "jira_assigned":
-      return { variant: "grouped", maxItemsPerSection: 3, showPriority: true, showStatus: true, colSpan: 8, rowSpan: 1, order: 0 };
+      return { variant: "grouped", maxItemsPerSection: 3, showPriority: true, showStatus: true, colSpan: 8, heightMode: "single", order: 0 };
     case "journal_do_next":
-      return { variant: "focused", maxInProgress: 3, maxOpen: 3, showLane: true, colSpan: 8, rowSpan: 1, order: 0 };
+      return { variant: "focused", maxInProgress: 3, maxOpen: 3, showLane: true, colSpan: 8, heightMode: "single", order: 0 };
     default:
       // Non-widget prompts still get layout defaults
-      return { colSpan: 8, rowSpan: 1, order: 0 };
+      return { colSpan: 8, heightMode: "single", order: 0 };
   }
 }
 
@@ -118,6 +118,16 @@ export function WidgetConfigEditor({ sourceType, uiConfig, onChange }: WidgetCon
               <option value="C">Celsius (°C)</option>
               <option value="F">Fahrenheit (°F)</option>
             </select>
+          </div>
+          <div className="space-y-1.5 col-span-2">
+            <Label className="text-xs">Location</Label>
+            <Input
+              type="text"
+              value={(uiConfig.location as string) ?? "Tulum"}
+              onChange={(e) => set("location", e.target.value)}
+              placeholder="Tulum"
+              className="h-9"
+            />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Hourly slots</Label>

@@ -9,10 +9,10 @@ import type { TodayFocusWidget } from "@/components/journal/today-focus/widget-t
 import { TodayFocusFallbackCard, renderTodayFocusWidget } from "@/components/journal/today-focus/widgets";
 import {
   resolveColSpan,
-  resolveRowSpan,
+  resolveHeightMode,
   resolveOrder,
   COL_SPAN_CLASSES,
-  ROW_SPAN_CLASSES,
+  HEIGHT_MODE_CLASSES,
 } from "@/components/journal/today-focus/grid-layout";
 
 interface PromptResult {
@@ -31,6 +31,7 @@ interface PromptResult {
 interface SummaryMeta {
   cached?: boolean;
   cachedAt?: string;
+  nextRefreshAt?: string;
 }
 
 interface MorningViewProps {
@@ -47,28 +48,21 @@ const SOURCE_ICONS = {
   jira_assigned: ListChecks,
 };
 
-/** Parse ui_config JSON safely, returning an empty object on failure */
 function parseUiConfig(raw: string | null | undefined): Record<string, unknown> {
   if (!raw) return {};
   try { return JSON.parse(raw); } catch { return {}; }
 }
 
-/**
- * Determine the grid cell classes for a given result.
- * Priority: widget.uiConfig.colSpan > prompt.ui_config.colSpan > variant-inferred default
- */
 function getCellClasses(result: PromptResult): string {
   const promptUiConfig = parseUiConfig(result.prompt.ui_config);
-  // Widget uiConfig takes precedence for typed widgets (it already includes layout fields)
   const effectiveUiConfig = (result.widget?.uiConfig as Record<string, unknown> | undefined) ?? promptUiConfig;
 
   const colSpan = resolveColSpan(effectiveUiConfig, result.widget);
-  const rowSpan = resolveRowSpan(effectiveUiConfig);
+  const heightMode = resolveHeightMode(effectiveUiConfig);
 
-  return cn(COL_SPAN_CLASSES[colSpan], ROW_SPAN_CLASSES[rowSpan]);
+  return cn(COL_SPAN_CLASSES[colSpan], HEIGHT_MODE_CLASSES[heightMode]);
 }
 
-/** Sort results by explicit order field, then by original list position */
 function sortResults(results: PromptResult[]): PromptResult[] {
   return [...results].sort((a, b) => {
     const aCfg = parseUiConfig(a.prompt.ui_config);
@@ -96,7 +90,7 @@ export function MorningView({ date, onOpenCapture }: MorningViewProps) {
       if (!response.ok) throw new Error("Failed to load summary");
       const data = await response.json();
       setResults(data.results || []);
-      setMeta({ cached: data.cached, cachedAt: data.cachedAt });
+      setMeta({ cached: data.cached, cachedAt: data.cachedAt, nextRefreshAt: data.nextRefreshAt });
     } catch (err) {
       console.error("Error loading Today Focus:", err);
       setError(err instanceof Error ? err.message : "Failed to load Today Focus");
@@ -179,69 +173,73 @@ export function MorningView({ date, onOpenCapture }: MorningViewProps) {
   const sortedResults = sortResults(results);
 
   return (
-    <div className="space-y-4 py-4">
-      {/* Header */}
-      <div className="flex items-center justify-between px-1">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-          <Sparkles className="w-4 h-4" />
-          Today Focus
-        </h3>
-        <div className="flex items-center gap-1">
-          <Link href="/settings/morning-view">
-            <Button variant="ghost" size="sm" className="h-7 px-2">
-              <Settings2 className="w-3.5 h-3.5" />
+    <section className="border-b border-border bg-card/30 px-3 py-4 sm:px-4">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            Today Focus
+          </h3>
+          <div className="flex items-center gap-1">
+            <Link href="/settings/morning-view">
+              <Button variant="ghost" size="sm" className="h-7 px-2">
+                <Settings2 className="w-3.5 h-3.5" />
+              </Button>
+            </Link>
+            <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={isRefreshing} className="h-7 px-2">
+              <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
             </Button>
-          </Link>
-          <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={isRefreshing} className="h-7 px-2">
-            <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
-          </Button>
+          </div>
         </div>
-      </div>
 
-      {/*
-        8-column grid.
-        Desktop (≥768px): up to 8 cols active — widgets can be ¼, ½ or full.
-        Tablet (640-767px): colSpan 2 becomes half, colSpan 4+ stays full.
-        Mobile (<640px): all widgets stack full-width (col-span-8 override).
-      */}
-      <div className="grid grid-cols-8 gap-3 auto-rows-auto">
-        {sortedResults.map((result) => {
-          const cellCls = getCellClasses(result);
+        <div className="grid grid-cols-8 gap-3 auto-rows-auto items-start">
+          {sortedResults.map((result) => {
+            const cellCls = getCellClasses(result);
 
-          if (result.widget) {
-            const rendered = renderTodayFocusWidget(result.widget);
-            if (rendered) {
-              return (
-                <div key={result.prompt.id} className={cellCls}>
-                  {rendered}
-                </div>
-              );
+            if (result.widget) {
+              const rendered = renderTodayFocusWidget(result.widget);
+              if (rendered) {
+                return (
+                  <div key={result.prompt.id} className={cellCls}>
+                    {rendered}
+                  </div>
+                );
+              }
             }
-          }
 
-          const SourceIcon = SOURCE_ICONS[result.prompt.source_type as keyof typeof SOURCE_ICONS] || Settings2;
-          return (
-            <div key={result.prompt.id} className={cellCls}>
-              <TodayFocusFallbackCard
-                title={result.prompt.title}
-                content={result.content}
-                error={result.error}
-                icon={<SourceIcon className="w-3.5 h-3.5" />}
-              />
-            </div>
-          );
-        })}
-      </div>
-
-      {meta.cached && meta.cachedAt && (
-        <div className="flex justify-center">
-          <span className="text-[10px] text-muted-foreground/50">
-            Cached ·{" "}
-            {new Date(meta.cachedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-          </span>
+            const SourceIcon = SOURCE_ICONS[result.prompt.source_type as keyof typeof SOURCE_ICONS] || Settings2;
+            return (
+              <div key={result.prompt.id} className={cellCls}>
+                <TodayFocusFallbackCard
+                  title={result.prompt.title}
+                  content={result.content}
+                  error={result.error}
+                  icon={<SourceIcon className="w-3.5 h-3.5" />}
+                />
+              </div>
+            );
+          })}
         </div>
-      )}
 
-    </div>
+        {meta.cachedAt && (
+          <div className="flex justify-center gap-2">
+            <span className="text-[10px] text-muted-foreground/40">
+              {meta.cached ? "Cached" : "Refreshed"} · {" "}
+              {new Date(meta.cachedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+              {meta.nextRefreshAt && (() => {
+                const msUntil = new Date(meta.nextRefreshAt!).getTime() - Date.now();
+                const minUntil = Math.max(0, Math.round(msUntil / 60000));
+                return (
+                  <span className="text-muted-foreground/30">
+                    {" · "}
+                    {minUntil <= 1 ? "refreshing soon" : `next refresh ~${minUntil}m`}
+                  </span>
+                );
+              })()}
+            </span>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

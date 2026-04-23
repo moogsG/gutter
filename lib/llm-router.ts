@@ -72,8 +72,10 @@ const getConfig = () => {
 	// Provider-specific defaults
 	const defaults = {
 		ollama: {
-			baseUrl: process.env.LLM_BASE_URL || "http://localhost:11434",
-			model: process.env.LLM_MODEL || "llama3.1:8b",
+			// Prefer project-wide OLLAMA_URL/OLLAMA_MODEL env vars (used across gutter),
+			// with LLM_* as explicit override layer on top.
+			baseUrl: process.env.LLM_BASE_URL || process.env.OLLAMA_URL || "http://localhost:11434",
+			model: process.env.LLM_MODEL || process.env.OLLAMA_MODEL || process.env.JOURNAL_COMMAND_MODEL || "qwen3:latest",
 		},
 		openai: {
 			baseUrl: process.env.LLM_BASE_URL || "https://api.openai.com/v1",

@@ -1,5 +1,7 @@
 export type Signifier = 'task' | 'appointment' | 'note' | 'memory' | 'important';
-export type EntryStatus = 'open' | 'done' | 'migrated' | 'killed';
+export type EntryStatus = 'open' | 'in-progress' | 'blocked' | 'done' | 'migrated' | 'killed';
+export type TaskLane = 'work' | 'personal' | 'family' | 'jw' | 'petalz';
+export type TaskPriority = 'low' | 'normal' | 'high';
 
 export interface JournalEntry {
   id: string;
@@ -7,6 +9,9 @@ export interface JournalEntry {
   signifier: Signifier;
   text: string;
   status: EntryStatus;
+  lane?: TaskLane | null;
+  priority?: TaskPriority | null;
+  waiting_on?: string | null;
   migrated_to?: string;
   migrated_from?: string;
   collection_id?: string;
@@ -24,6 +29,9 @@ export interface NewEntry {
   text: string;
   tags?: string[];
   parent_id?: string;
+  lane?: TaskLane;
+  priority?: TaskPriority;
+  waiting_on?: string;
 }
 
 export interface Collection {

@@ -8,6 +8,10 @@ export interface KanbanQueryArgs {
   date?: string;
 }
 
+export interface KanbanBoardQueryArgs {
+  date?: string;
+}
+
 export interface MoveTaskPayload {
   taskId: string;
   status: string;
@@ -28,15 +32,15 @@ export const tasksApi = createApi({
       providesTags: (result, error, month) => [{ type: "Calendar", id: month }],
       keepUnusedDataFor: 30,
     }),
-    // Kanban: fetch tasks for a specific status + optional date
-    getKanbanTasks: builder.query<Task[], KanbanQueryArgs>({
-      query: ({ status, date }) => {
-        const params = new URLSearchParams({ status, limit: "200" });
+    // Kanban: fetch all board tasks in a single request, then group client-side
+    getKanbanBoardTasks: builder.query<Task[], KanbanBoardQueryArgs>({
+      query: ({ date }) => {
+        const params = new URLSearchParams({ status: "open,in-progress,blocked,done", limit: "500" });
         if (date) params.set("date", date);
         return `/tasks?${params.toString()}`;
       },
-      providesTags: (result, error, { status, date }) => [
-        { type: "KanbanTasks", id: `${status}-${date ?? "all"}` },
+      providesTags: (result, error, { date }) => [
+        { type: "KanbanTasks", id: `board-${date ?? "all"}` },
         "KanbanTasks",
       ],
     }),
@@ -55,6 +59,6 @@ export const tasksApi = createApi({
 export const {
   useGetCalendarQuery,
   useGetCalendarMonthQuery,
-  useGetKanbanTasksQuery,
+  useGetKanbanBoardTasksQuery,
   useMoveTaskMutation,
 } = tasksApi;

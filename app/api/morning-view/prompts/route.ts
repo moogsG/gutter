@@ -110,6 +110,12 @@ export async function PATCH(req: NextRequest) {
         : null;
       delete updates.uiConfig;
     }
+
+    // Normalize sourceConfig (camelCase from client) → source_config (snake_case for DB)
+    if (updates.sourceConfig !== undefined) {
+      updates.source_config = updates.sourceConfig;
+      delete updates.sourceConfig;
+    }
     
     // Build UPDATE query dynamically based on provided fields
     const allowedFields = ['title', 'prompt_text', 'source_type', 'source_config', 'frequency', 'active', 'sort_order', 'ui_config'];

@@ -2,7 +2,7 @@
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { COL_SPAN_LABELS, ROW_SPAN_LABELS } from "./grid-layout";
+import { COL_SPAN_LABELS, HEIGHT_MODE_LABELS, resolveHeightMode } from "./grid-layout";
 
 type UiConfigState = Record<string, unknown>;
 
@@ -20,7 +20,7 @@ export function LayoutFootprintSection({ uiConfig, onChange }: LayoutFootprintSe
   const set = (key: string, value: unknown) => onChange({ ...uiConfig, [key]: value });
 
   const colSpan = (uiConfig.colSpan as number) ?? 8;
-  const rowSpan = (uiConfig.rowSpan as number) ?? 1;
+  const heightMode = resolveHeightMode(uiConfig);
   const order = (uiConfig.order as number) ?? 0;
 
   return (
@@ -46,15 +46,26 @@ export function LayoutFootprintSection({ uiConfig, onChange }: LayoutFootprintSe
           </select>
         </div>
 
-        {/* Height */}
+        {/* Height slot — desktop only; mobile always natural height */}
         <div className="space-y-1.5">
-          <Label className="text-xs">Height</Label>
+          <Label className="text-xs">
+            Height slot{" "}
+            <span className="text-muted-foreground font-normal">(desktop only)</span>
+          </Label>
           <select
-            value={rowSpan}
-            onChange={(e) => set("rowSpan", Number(e.target.value))}
+            value={heightMode}
+            onChange={(e) => {
+              const v = e.target.value as import("./grid-layout").HeightMode;
+              onChange({
+                ...uiConfig,
+                heightMode: v,
+                // Legacy field kept for backward compat
+                rowSpan: v === "double" ? 2 : 1,
+              });
+            }}
             className={selectCls}
           >
-            {(Object.entries(ROW_SPAN_LABELS) as [string, string][]).map(([val, label]) => (
+            {(Object.entries(HEIGHT_MODE_LABELS) as [string, string][]).map(([val, label]) => (
               <option key={val} value={val}>
                 {label}
               </option>
@@ -79,6 +90,12 @@ export function LayoutFootprintSection({ uiConfig, onChange }: LayoutFootprintSe
           placeholder="0"
         />
       </div>
+
+      <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
+        <strong className="font-semibold">1 slot</strong> — card is fixed at 256 px on desktop; overflowing content scrolls inside the card.{" "}
+        <strong className="font-semibold">2 slots</strong> — card is fixed at 512 px on desktop; same overflow behaviour.
+        Mobile always stacks at natural content height — no fixed heights applied on small screens.
+      </p>
     </div>
   );
 }

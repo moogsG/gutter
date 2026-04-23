@@ -3,6 +3,7 @@
 import {
 	createContext,
 	type ReactNode,
+	useCallback,
 	useContext,
 	useEffect,
 	useState,
@@ -34,29 +35,34 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 	const [activeProject, setActiveProjectState] = useState<Project | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 
-	const fetchProjects = async () => {
+	const fetchProjects = useCallback(async () => {
 		try {
 			setIsLoading(true);
-			const res = await fetch("/api/projects");
-			if (res.ok) {
-				const data = await res.json();
-				setProjects(data);
+			const res = await fetch("/api/projects", {
+				cache: "no-store",
+			});
+			if (!res.ok) {
+				throw new Error(`Failed to fetch projects: ${res.status}`);
+			}
 
-				// Restore active project from localStorage
-				const savedProjectId = localStorage.getItem("gutter-active-project");
-				if (savedProjectId) {
-					const saved = data.find((p: Project) => p.id === savedProjectId);
-					if (saved) {
-						setActiveProjectState(saved);
-					}
+			const data = await res.json();
+			setProjects(data);
+
+			// Restore active project from localStorage
+			const savedProjectId = localStorage.getItem("gutter-active-project");
+			if (savedProjectId) {
+				const saved = data.find((p: Project) => p.id === savedProjectId);
+				if (saved) {
+					setActiveProjectState(saved);
 				}
 			}
 		} catch (error) {
 			console.error("Failed to fetch projects:", error);
+			setProjects([]);
 		} finally {
 			setIsLoading(false);
 		}
-	};
+	}, []);
 
 	useEffect(() => {
 		fetchProjects();

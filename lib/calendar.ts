@@ -1,8 +1,9 @@
 import { execSync } from "node:child_process";
+import { env } from "@/lib/env";
 
 // Configuration
-export const CALENDAR_ENABLED = process.env.CALENDAR_ENABLED !== "false";
-export const ACCLI = process.env.CALENDAR_CLI || "npx @joargp/accli";
+export const CALENDAR_ENABLED = env.calendarEnabled;
+export const ACCLI = env.calendarCli;
 export const RETRY_ATTEMPTS = parseInt(
 	process.env.CALENDAR_RETRY_ATTEMPTS || "3",
 	10,
@@ -148,7 +149,7 @@ export async function fetchCalendarEvents(
 		for (let i = 0; i < calendarNames.length; i++) {
 			const calName = calendarNames[i];
 			try {
-				const cmd = `npx @joargp/accli events "${calName}" --from ${from}T00:00:00 --to ${to}T23:59:59 --json`;
+				const cmd = `${ACCLI} events "${calName}" --from ${from}T00:00:00 --to ${to}T23:59:59 --json`;
 				const output = await executeWithRetry(cmd);
 				const parsed = JSON.parse(output.trim());
 				const events = parsed.events || parsed || [];
@@ -186,6 +187,15 @@ export async function fetchCalendarEvents(
 		const errMsg = error instanceof Error ? error.message : String(error);
 		return { ok: false, error: errMsg };
 	}
+}
+
+/**
+ * Get today's calendar events
+ */
+export async function getTodayEvents(): Promise<CalendarEvent[]> {
+	const today = new Date().toISOString().split('T')[0];
+	const result = await fetchCalendarEvents(today, today);
+	return result.data || [];
 }
 
 export async function createCalendarEvent(

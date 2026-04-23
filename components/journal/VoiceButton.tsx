@@ -4,6 +4,7 @@ import { memo, useCallback, useRef, useState } from "react";
 import { Mic, Square, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface VoiceButtonProps {
   onTranscript: (text: string) => void;
@@ -49,6 +50,8 @@ export const VoiceButton = memo(function VoiceButton({
   }, []);
 
   const handleClick = useCallback(async () => {
+    console.log("[VoiceButton] click", { state, disabled });
+
     if (state === "recording") {
       // Stop and transcribe
       const blob = await stopRecording();
@@ -72,14 +75,21 @@ export const VoiceButton = memo(function VoiceButton({
           body: formData,
         });
 
-        if (!res.ok) throw new Error("Transcription failed");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data?.detail || data?.error || "Transcription failed");
+        }
 
-        const { text } = await res.json();
+        const text = typeof data?.text === "string" ? data.text : "";
+        console.log("[VoiceButton] transcript result", { textLength: text.length });
         if (text && text.trim()) {
           onTranscript(text.trim());
+        } else {
+          toast.error("No speech detected");
         }
       } catch (err) {
         console.error("Voice transcription error:", err);
+        toast.error(err instanceof Error ? err.message : "Voice transcription failed");
       } finally {
         setState("idle");
       }
@@ -88,6 +98,26 @@ export const VoiceButton = memo(function VoiceButton({
 
     // Start recording
     try {
+      console.log("[VoiceButton] capability check", {
+        hasWindow: typeof window !== "undefined",
+        hasMediaDevices: !!navigator?.mediaDevices,
+        hasGetUserMedia: !!navigator?.mediaDevices?.getUserMedia,
+        hasMediaRecorder: typeof MediaRecorder !== "undefined",
+      });
+
+      if (typeof window === "undefined" || !navigator?.mediaDevices?.getUserMedia) {
+        console.error("[VoiceButton] getUserMedia unsupported");
+        toast.error("Microphone capture is not supported in this browser");
+        return;
+      }
+
+      if (typeof MediaRecorder === "undefined") {
+        console.error("[VoiceButton] MediaRecorder unavailable");
+        toast.error("MediaRecorder is not available in this browser");
+        return;
+      }
+
+      console.log("[VoiceButton] requesting microphone access");
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -95,20 +125,54 @@ export const VoiceButton = memo(function VoiceButton({
           sampleRate: 16000,
         },
       });
+      console.log("[VoiceButton] microphone access granted", {
+        tracks: stream.getAudioTracks().map((track) => ({
+          label: track.label,
+          enabled: track.enabled,
+          muted: track.muted,
+          readyState: track.readyState,
+        })),
+      });
       streamRef.current = stream;
 
-      const recorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-          ? "audio/webm;codecs=opus"
-          : "audio/webm",
+      // Determine best mime type for browser (Safari compatibility)
+      let mimeType = "audio/webm";
+      const supportsWebmOpus = MediaRecorder.isTypeSupported("audio/webm;codecs=opus");
+      const supportsWebm = MediaRecorder.isTypeSupported("audio/webm");
+      const supportsMp4 = MediaRecorder.isTypeSupported("audio/mp4");
+      console.log("[VoiceButton] mime support", {
+        supportsWebmOpus,
+        supportsWebm,
+        supportsMp4,
       });
+
+      if (supportsWebmOpus) {
+        mimeType = "audio/webm;codecs=opus";
+      } else if (supportsMp4) {
+        mimeType = "audio/mp4"; // Safari fallback
+      } else if (supportsWebm) {
+        mimeType = "audio/webm";
+      }
+
+      console.log("[VoiceButton] creating MediaRecorder", { mimeType });
+      const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
 
+      recorder.onerror = (event) => {
+        console.error("MediaRecorder error:", event);
+        toast.error("Recording failed");
+        cleanup();
+        setState("idle");
+      };
+
       recorder.start();
+      console.log("[VoiceButton] recording started", { mimeType });
       setState("recording");
     } catch (err) {
       console.error("Microphone access error:", err);
+      const message = err instanceof Error ? `${err.name}: ${err.message}` : "Microphone access failed";
+      toast.error(message);
       cleanup();
       setState("idle");
     }

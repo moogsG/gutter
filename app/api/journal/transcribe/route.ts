@@ -10,6 +10,15 @@ const WHISPER_MODEL = join(
 	".cache/whisper/ggml-base.en.bin",
 );
 
+// Use absolute paths for binaries so they work regardless of the process PATH
+// (LaunchAgent environments often have a restricted PATH that excludes /opt/homebrew/bin)
+const FFMPEG_BIN = existsSync("/opt/homebrew/bin/ffmpeg")
+	? "/opt/homebrew/bin/ffmpeg"
+	: "ffmpeg";
+const WHISPER_BIN = existsSync("/opt/homebrew/bin/whisper-cli")
+	? "/opt/homebrew/bin/whisper-cli"
+	: "whisper-cli";
+
 export async function POST(req: NextRequest) {
 	// Rate limit: 10 requests per minute (CPU-intensive transcription)
 	const limited = rateLimitMiddleware(req, {
@@ -31,9 +40,16 @@ export async function POST(req: NextRequest) {
 			);
 		}
 
-		// Write uploaded audio to temp file
+		// Write uploaded audio to temp file, preserving a sane extension for browser-specific mime types
 		const buffer = Buffer.from(await audioFile.arrayBuffer());
-		const tempInput = join(tmpdir(), `journal-voice-${Date.now()}.webm`);
+		const extension = audioFile.type.includes("mp4")
+			? "mp4"
+			: audioFile.type.includes("mpeg")
+				? "mp3"
+				: audioFile.type.includes("wav")
+					? "wav"
+					: "webm";
+		const tempInput = join(tmpdir(), `journal-voice-${Date.now()}.${extension}`);
 		const tempWav = join(tmpdir(), `journal-voice-${Date.now()}.wav`);
 		tempFiles.push(tempInput, tempWav);
 
@@ -42,12 +58,14 @@ export async function POST(req: NextRequest) {
 		// Convert to 16kHz mono WAV (whisper-cpp requirement)
 		try {
 			execSync(
-				`ffmpeg -y -i "${tempInput}" -ar 16000 -ac 1 -c:a pcm_s16le "${tempWav}" 2>/dev/null`,
-				{ timeout: 10000 },
+				`"${FFMPEG_BIN}" -y -i "${tempInput}" -vn -ar 16000 -ac 1 -c:a pcm_s16le "${tempWav}"`,
+				{ timeout: 10000, stdio: "pipe" },
 			);
-		} catch {
+		} catch (error) {
+			const detail = error instanceof Error ? error.message : String(error);
+			console.error("Audio conversion failed:", detail);
 			return NextResponse.json(
-				{ error: "Failed to convert audio format" },
+				{ error: "Failed to convert audio format", detail },
 				{ status: 500 },
 			);
 		}
@@ -56,15 +74,16 @@ export async function POST(req: NextRequest) {
 		let transcript = "";
 		try {
 			const output = execSync(
-				`whisper-cli -m "${WHISPER_MODEL}" -f "${tempWav}" --no-timestamps --no-prints 2>/dev/null`,
+				`"${WHISPER_BIN}" -m "${WHISPER_MODEL}" -f "${tempWav}" --no-timestamps --no-prints 2>/dev/null`,
 				{ timeout: 30000, encoding: "utf-8" },
 			);
 			transcript = output.trim();
-		} catch {
+		} catch (error) {
+			console.error("Primary whisper transcription failed:", error);
 			// Fallback: try without --no-prints and filter output
 			try {
 				const output = execSync(
-					`whisper-cli -m "${WHISPER_MODEL}" -f "${tempWav}" --no-timestamps 2>&1`,
+					`"${WHISPER_BIN}" -m "${WHISPER_MODEL}" -f "${tempWav}" --no-timestamps 2>&1`,
 					{ timeout: 30000, encoding: "utf-8" },
 				);
 				// Extract just the transcription lines (not whisper debug output)

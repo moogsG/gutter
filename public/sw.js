@@ -47,9 +47,15 @@ self.addEventListener("activate", (event) => {
 // Fetch event - network first, fallback to cache
 self.addEventListener("fetch", (event) => {
   const { request } = event;
+  const url = new URL(request.url);
 
   // Skip non-GET requests
   if (request.method !== "GET") {
+    return;
+  }
+
+  // Only handle same-origin requests
+  if (url.origin !== self.location.origin) {
     return;
   }
 

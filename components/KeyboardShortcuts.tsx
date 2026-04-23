@@ -18,6 +18,10 @@ const SHORTCUTS: Shortcut[] = [
   { keys: ["Esc"], description: "Close modals/dialogs", category: "Navigation" },
   { keys: ["⌘", "B"], description: "Toggle sidebar", category: "Navigation" },
   
+  // Capture
+  { keys: ["⌘", "Shift", "C"], description: "Open quick capture", category: "Capture" },
+  { keys: ["⌘", "Shift", "V"], description: "Start voice capture", category: "Capture" },
+  
   // Journal
   { keys: ["N"], description: "New entry (when in daily log)", category: "Journal" },
   { keys: ["⌘", "Enter"], description: "Save current entry", category: "Journal" },
@@ -41,6 +45,7 @@ const SHORTCUTS: Shortcut[] = [
 
 const CATEGORIES = [
   "Navigation",
+  "Capture",
   "Journal",
   "Actions",
   "Command Palette",

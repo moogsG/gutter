@@ -1,11 +1,15 @@
 // Jira integration module
-// Shared utilities for fetching and updating Jira issues
+// Shared utilities for fetching, storing, and updating Jira issues
+
+import { getDb } from "@/lib/db";
 
 // Configuration
 export const JIRA_ENABLED = process.env.JIRA_ENABLED !== "false";
 export const JIRA_HOST = process.env.JIRA_HOST || "";
 export const JIRA_EMAIL = process.env.JIRA_EMAIL || "";
 export const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN || "";
+// Temporary fallback token path until env is updated in the running app context
+export const JIRA_API_TOKEN_FALLBACK = process.env.JIRA_API_TOKEN_FALLBACK || "";
 // Comma-separated list of Jira projects to track (e.g. "GDEV,ISE")
 export const JIRA_PROJECTS = (
 	process.env.JIRA_PROJECTS ||
@@ -69,17 +73,97 @@ export interface JiraIssue {
 	updated: string;
 }
 
+function storeIssues(issues: JiraIssue[]) {
+	const db = getDb();
+	const now = new Date().toISOString();
+	const stmt = db.prepare(`
+		INSERT INTO jira_issues (id, issue_key, summary, status, priority, assignee, url, updated, synced_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(issue_key) DO UPDATE SET
+			summary = excluded.summary,
+			status = excluded.status,
+			priority = excluded.priority,
+			assignee = excluded.assignee,
+			url = excluded.url,
+			updated = excluded.updated,
+			synced_at = excluded.synced_at
+	`);
+
+	const clearMissing = db.prepare(
+		`DELETE FROM jira_issues WHERE issue_key NOT IN (${issues.map(() => "?").join(",") || "''"})`,
+	);
+
+	db.exec("BEGIN");
+	try {
+		for (const issue of issues) {
+			stmt.run(
+				issue.id,
+				issue.key,
+				issue.summary,
+				issue.status,
+				issue.priority,
+				issue.assignee,
+				issue.url,
+				issue.updated,
+				now,
+			);
+		}
+		clearMissing.run(...issues.map((issue) => issue.key));
+		db.exec("COMMIT");
+	} catch (error) {
+		db.exec("ROLLBACK");
+		throw error;
+	}
+}
+
+export function getStoredIssues(): JiraIssue[] {
+	const db = getDb();
+	return db
+		.prepare(`
+			SELECT id, issue_key as key, summary, status, priority, assignee, url, updated
+			FROM jira_issues
+			ORDER BY synced_at DESC, updated DESC
+		`)
+		.all() as JiraIssue[];
+}
+
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function readEnvFileValue(key: string): string {
+	try {
+		const fs = require("node:fs");
+		const path = require("node:path");
+		const envPath = path.join(process.cwd(), ".env");
+		const envContent = fs.readFileSync(envPath, "utf8");
+		const line = envContent
+			.split(/\r?\n/)
+			.find((entry: string) => entry.startsWith(`${key}=`));
+		return line ? line.slice(key.length + 1).trim() : "";
+	} catch {
+		return "";
+	}
+}
+
+function getJiraConfig() {
+	return {
+		host: JIRA_HOST || readEnvFileValue("JIRA_HOST"),
+		email: JIRA_EMAIL || readEnvFileValue("JIRA_EMAIL"),
+		token:
+			readEnvFileValue("JIRA_API_TOKEN_FALLBACK") ||
+			JIRA_API_TOKEN_FALLBACK ||
+			readEnvFileValue("JIRA_API_TOKEN") ||
+			JIRA_API_TOKEN,
+	};
+}
+
 function getAuthHeader(): string {
-	if (!JIRA_EMAIL || !JIRA_API_TOKEN) {
+	const { email, token } = getJiraConfig();
+	if (!email || !token) {
 		throw new Error("JIRA_EMAIL and JIRA_API_TOKEN must be set");
 	}
-	const auth = Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString(
-		"base64",
-	);
+	const auth = Buffer.from(`${email}:${token}`).toString("base64");
 	return `Basic ${auth}`;
 }
 
@@ -130,7 +214,8 @@ export async function fetchAssignedIssues(
 		throw new Error("Jira integration is disabled");
 	}
 
-	if (!JIRA_HOST) {
+	const { host } = getJiraConfig();
+	if (!host) {
 		throw new Error("JIRA_HOST is not configured");
 	}
 
@@ -142,19 +227,25 @@ export async function fetchAssignedIssues(
 		}
 	}
 
-	const jql = encodeURIComponent(
-		`${JIRA_PROJECT_JQL} AND assignee = currentUser() AND status != Done ORDER BY priority DESC, updated DESC`,
-	);
+	const url = `https://${host}/rest/api/3/search/jql`;
 
-	const url = `https://${JIRA_HOST}/rest/api/3/search?jql=${jql}&fields=summary,status,priority,assignee,updated&maxResults=50`;
+	const { email } = getJiraConfig();
+	const assigneeClause = email
+		? `assignee = \"${email}\"`
+		: "assignee = currentUser()";
 
 	const response = await fetchWithRetry(url, {
-		method: "GET",
+		method: "POST",
 		headers: {
 			Authorization: getAuthHeader(),
 			Accept: "application/json",
 			"Content-Type": "application/json",
 		},
+		body: JSON.stringify({
+			jql: `${JIRA_PROJECT_JQL} AND ${assigneeClause} AND status NOT IN (Done, Cancelled, Canceled) ORDER BY priority DESC, updated DESC`,
+			fields: ["summary", "status", "priority", "assignee", "updated"],
+			maxResults: 50,
+		}),
 	});
 
 	const data = await response.json();
@@ -166,12 +257,13 @@ export async function fetchAssignedIssues(
 		status: issue.fields.status?.name || "Unknown",
 		priority: issue.fields.priority?.name || "Medium",
 		assignee: issue.fields.assignee?.displayName || null,
-		url: `https://${JIRA_HOST}/browse/${issue.key}`,
+		url: `https://${host}/browse/${issue.key}`,
 		updated: issue.fields.updated,
 	}));
 
-	// Update cache
+	// Update cache + persistent store
 	jiraCache.issues = issues;
+	storeIssues(issues);
 
 	return issues;
 }
