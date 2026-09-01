@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { type NextRequest, NextResponse } from "next/server";
 import {
 	handleApiError,
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
 		}
 
 		const db = getDb();
-		const id = `col-${Date.now()}`;
+		const id = `col-${randomUUID()}`;
 		const now = new Date().toISOString();
 
 		db.prepare(

@@ -14,6 +14,9 @@ interface KanbanColumnProps {
   isOver?: boolean;
   accentClass: string;
   countClass: string;
+  onOpenTask: (task: Task, opener: HTMLButtonElement) => void;
+  onMoveTask: (task: Task, status: string) => void;
+  movingTaskId?: string | null;
 }
 
 export function KanbanColumn({
@@ -22,6 +25,9 @@ export function KanbanColumn({
   tasks,
   accentClass,
   countClass,
+  onOpenTask,
+  onMoveTask,
+  movingTaskId,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
 
@@ -60,7 +66,13 @@ export function KanbanColumn({
       >
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
           {safeTasks.map((task) => (
-            <KanbanCard key={task.id} task={task} />
+            <KanbanCard
+              key={task.id}
+              task={task}
+              onOpen={onOpenTask}
+              onMove={onMoveTask}
+              isMoving={movingTaskId === task.id}
+            />
           ))}
         </SortableContext>
 

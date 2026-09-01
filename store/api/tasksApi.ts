@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { CalendarEvent, CalendarRunwayData, Task } from "@/types";
+import type { CalendarEvent, CalendarRunwayData, Task, TaskComment } from "@/types";
 
 export type KanbanStatus = "todo" | "in-progress" | "blocked" | "done";
 
@@ -24,7 +24,7 @@ export interface MoveTaskPayload {
 export const tasksApi = createApi({
   reducerPath: "tasksApi",
   baseQuery: fetchBaseQuery({ baseUrl: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/api` }),
-  tagTypes: ["Calendar", "Tasks", "KanbanTasks"],
+  tagTypes: ["Calendar", "Tasks", "KanbanTasks", "TaskComments"],
   endpoints: (builder) => ({
     getCalendar: builder.query<{ events: CalendarEvent[] }, void>({
       query: () => "/calendar",
@@ -60,7 +60,40 @@ export const tasksApi = createApi({
         method: "POST",
         body: { action: "move", taskId, status },
       }),
+      async onQueryStarted({ taskId, status }, { dispatch, queryFulfilled }) {
+        const patch = dispatch(
+          tasksApi.util.updateQueryData("getKanbanBoardTasks", {}, (tasks) => {
+            const task = tasks.find((item) => item.id === taskId);
+            if (task) task.status = status;
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
       invalidatesTags: ["KanbanTasks"],
+    }),
+    getTask: builder.query<Task, string>({
+      query: (taskId) => `/tasks/${taskId}`,
+      providesTags: (_result, _error, taskId) => [{ type: "Tasks", id: taskId }],
+    }),
+    getTaskComments: builder.query<TaskComment[], string>({
+      query: (taskId) => `/tasks/${taskId}/comments`,
+      providesTags: (_result, _error, taskId) => [{ type: "TaskComments", id: taskId }],
+    }),
+    addTaskComment: builder.mutation<TaskComment, { taskId: string; body: string }>({
+      query: ({ taskId, body }) => ({
+        url: `/tasks/${taskId}/comments`,
+        method: "POST",
+        body: { body },
+      }),
+      invalidatesTags: (_result, _error, { taskId }) => [
+        { type: "TaskComments", id: taskId },
+        { type: "Tasks", id: taskId },
+        "KanbanTasks",
+      ],
     }),
   }),
 });
@@ -71,4 +104,7 @@ export const {
   useGetCalendarRunwayQuery,
   useGetKanbanBoardTasksQuery,
   useMoveTaskMutation,
+  useGetTaskQuery,
+  useGetTaskCommentsQuery,
+  useAddTaskCommentMutation,
 } = tasksApi;

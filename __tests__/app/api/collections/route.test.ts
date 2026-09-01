@@ -154,7 +154,7 @@ describe("POST /api/collections", () => {
 		expect(response.status).toBe(200);
 		expect(data.title).toBe("My Collection");
 		expect(data.icon).toBe("📝");
-		expect(data.id).toMatch(/^col-\d+$/);
+		expect(data.id).toMatch(/^col-[0-9a-f-]{36}$/);
 		expect(data.created_at).toBeDefined();
 	});
 

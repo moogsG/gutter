@@ -954,30 +954,54 @@ Same as `/api/journal` GET
 
 ---
 
-## Tasks (Legacy)
+## Tasks and Task Threads
 
 ### GET `/api/tasks`
 
-**Fetch tasks from legacy `tasks` table**
+Lists journal task entries for the Kanban board. Accepts `status`, `date`, and `limit` query parameters. `status` can be a Kanban name (`todo`, `in-progress`, `blocked`, `done`) or a comma-separated list of journal statuses. Each result includes `comment_count` and `last_comment_at`.
+
+**Authentication:** A valid human session or bearer credential with `tasks:read`.
+
+### POST `/api/tasks`
+
+Creates, completes, or moves a task with an `action` of `add`, `complete`, or `move`. This endpoint is human-session only; bearer agents receive `403` and cannot mutate task lifecycle state.
+
+### GET `/api/tasks/:id`
+
+Returns one task with its lifecycle metadata, `comment_count`, and `last_comment_at`. Returns `404` for non-task entries or unknown IDs.
+
+### GET `/api/tasks/:id/comments`
+
+Returns the append-only conversation in chronological order. Requires a human session or bearer credential with `comments:read`.
+
+### POST `/api/tasks/:id/comments`
+
+Appends Markdown to a task conversation.
+
+```json
+{
+  "body": "Verified the migration and backup.",
+  "source_ref": "run:verification-42"
+}
+```
+
+Human writes derive identity from the signed session and ignore idempotency headers. Agent writes derive identity from the bearer credential, require the `comments:write` scope and an `Idempotency-Key` header, and return `201` when created or `200` for an exact retry. Reusing a key with a different task, body, or source reference returns `409`.
+
+Actor type and actor ID are server-derived; request bodies cannot spoof provenance. Comments cannot be edited or deleted through the API.
 
 **Response (200):**
 ```json
 [
   {
-    "id": "task-123",
+    "id": "je-123",
     "text": "Fix bug",
     "status": "open",
-    "project": "gutter",
+    "comment_count": 2,
+    "last_comment_at": "2026-09-01T12:00:00.000Z",
     "created_at": "2026-03-01T10:00:00.000Z"
   }
 ]
 ```
-
-**Rate Limit:** None  
-**Auth Required:** Yes  
-**Notes:**
-- Legacy endpoint (pre-journal system)
-- New entries should use `/api/journal`
 
 ---
 

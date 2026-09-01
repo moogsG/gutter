@@ -258,7 +258,7 @@ describe("validateTask()", () => {
 	});
 
 	it("accepts valid status values", () => {
-		const statuses = ["open", "in-progress", "blocked", "done", "cancelled"];
+		const statuses = ["open", "in-progress", "blocked", "done", "killed", "migrated"];
 		for (const status of statuses) {
 			const result = validateTask({ title: "Test", status });
 			expect(result.valid).toBe(true);

@@ -46,10 +46,25 @@ SESSION_MAX_AGE_DAYS=30
 ```
 
 **Security notes:**
-- `AUTH_SECRET` should be unique per installation
+- `AUTH_SECRET` is required when authentication is enabled and should be unique per installation
 - Never commit `.env` to version control
 - Rotate `AUTH_SECRET` if compromised (invalidates all sessions)
 - Auth is single-user only (multi-user support roadmapped)
+
+### Agent task API credentials
+
+Create a scoped bearer credential for a stable agent identity with:
+
+```bash
+bun run agent-token:create -- --actor-id jynx
+```
+
+The command stores only the SHA-256 token hash in the configured database and
+prints the plaintext token once. Capture it in the caller's secret store; it
+cannot be recovered from Gutter later. Generated credentials receive
+`tasks:read`, `comments:read`, and `comments:write`. Use the token with the
+HTTP Authorization Bearer scheme, and include a unique `Idempotency-Key`
+header on every agent comment write.
 
 ---
 
@@ -58,18 +73,19 @@ SESSION_MAX_AGE_DAYS=30
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATABASE_PATH` | `./gutter-journal.db` | Path to journal SQLite database |
-| `JOURNAL_BACKUP_DIR` | `./backups` | Directory for automatic daily backups |
+| `BACKUP_DIR` | `./backups` | Directory for automatic daily backups |
 
 **Example:**
 ```env
 DATABASE_PATH=/var/lib/gutter/journal.db
-JOURNAL_BACKUP_DIR=/var/lib/gutter/backups
+BACKUP_DIR=/var/lib/gutter/backups
 ```
 
 **Backup behavior:**
 - Automatic daily backup on first connection
-- Retention: last 7 days
-- Manual trigger: call `triggerBackup()` in `lib/journal-db.ts`
+- Retention: latest 7 snapshots
+- Uses SQLite `VACUUM INTO` for a transactionally consistent snapshot, including committed WAL pages
+- Manual trigger: call `triggerBackup()` in `lib/db.ts`
 
 ---
 
@@ -300,7 +316,7 @@ SESSION_MAX_AGE_DAYS=30
 
 # Database
 DATABASE_PATH=./gutter-journal.db
-JOURNAL_BACKUP_DIR=./backups
+BACKUP_DIR=./backups
 
 # Theme
 DEFAULT_THEME=cyberpink
@@ -348,7 +364,7 @@ PORT=80
 HOST=0.0.0.0
 SESSION_MAX_AGE_DAYS=7
 DATABASE_PATH=/var/lib/gutter/journal.db
-JOURNAL_BACKUP_DIR=/var/lib/gutter/backups
+BACKUP_DIR=/var/lib/gutter/backups
 ```
 
 ### Minimal (no integrations)

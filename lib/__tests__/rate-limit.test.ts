@@ -3,7 +3,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { checkRateLimit, rateLimitMiddleware } from "@/lib/rate-limit";
+import { checkRateLimit, clearRateLimitState, rateLimitMiddleware } from "@/lib/rate-limit";
 
 // Mock security-logger module
 vi.mock("@/lib/security-logger", () => ({
@@ -18,6 +18,7 @@ vi.mock("@/lib/security-logger", () => ({
 describe("checkRateLimit()", () => {
 	beforeEach(() => {
 		// Clear all rate limit logs between tests
+		clearRateLimitState();
 		vi.clearAllMocks();
 	});
 
@@ -131,6 +132,7 @@ describe("checkRateLimit()", () => {
 
 describe("rateLimitMiddleware()", () => {
 	beforeEach(() => {
+		clearRateLimitState();
 		vi.clearAllMocks();
 	});
 
@@ -145,7 +147,7 @@ describe("rateLimitMiddleware()", () => {
 		expect(response).toBeNull();
 	});
 
-	it("returns 429 response when over limit", () => {
+	it("enforces the configured limit instead of acting as a no-op", () => {
 		const config = { windowMs: 60000, maxRequests: 2 };
 
 		// Use up the limit

@@ -2,12 +2,29 @@ export interface Task {
   id: string;
   date: string;
   text: string;
+  title?: string;
   status: string;
   tags: string;
+  lane?: string | null;
+  priority?: string | null;
+  waiting_on?: string | null;
   collection_id?: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;
+  comment_count?: number;
+  last_comment_at?: string | null;
+}
+
+export interface TaskComment {
+  id: string;
+  task_id: string;
+  body: string;
+  actor_type: "human" | "agent" | "system";
+  actor_id: string;
+  source_ref: string | null;
+  idempotency_key: string | null;
+  created_at: string;
 }
 
 export interface DailyLogEntry {

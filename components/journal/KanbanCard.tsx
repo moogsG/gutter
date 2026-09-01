@@ -3,6 +3,13 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { Task } from "@/types";
 import {
@@ -10,11 +17,16 @@ import {
   CheckSquare,
   AlertTriangle,
   GripVertical,
+  MessageCircle,
+  MoreHorizontal,
 } from "lucide-react";
 
 interface KanbanCardProps {
   task: Task;
   isDragging?: boolean;
+  onOpen?: (task: Task, opener: HTMLButtonElement) => void;
+  onMove?: (task: Task, status: string) => void;
+  isMoving?: boolean;
 }
 
 function StatusIcon({ status }: { status: string }) {
@@ -39,7 +51,14 @@ function parseTags(tags: string | string[] | null): string[] {
   try { return JSON.parse(tags); } catch { return []; }
 }
 
-export function KanbanCard({ task, isDragging }: KanbanCardProps) {
+const STATUS_OPTIONS = [
+  ["open", "To Do"],
+  ["in-progress", "In Progress"],
+  ["blocked", "Blocked"],
+  ["done", "Done"],
+] as const;
+
+export function KanbanCard({ task, isDragging, onOpen, onMove, isMoving }: KanbanCardProps) {
   const {
     attributes,
     listeners,
@@ -65,14 +84,14 @@ export function KanbanCard({ task, isDragging }: KanbanCardProps) {
       style={dndStyle}
       className={cn(
         "group relative rounded-lg border border-border bg-card p-3 shadow-sm",
-        "cursor-grab active:cursor-grabbing select-none",
-        isActive && "opacity-50 ring-2 ring-primary/40 shadow-lg"
+        "select-none",
+        isActive && "opacity-50 ring-2 ring-primary/40"
       )}
-      {...attributes}
     >
       {/* Drag handle */}
       <button
         type="button"
+        {...attributes}
         {...listeners}
         className="absolute top-2.5 right-2 text-muted-foreground/30 group-hover:text-muted-foreground/70 transition-colors bg-transparent border-0 p-0 cursor-grab active:cursor-grabbing"
         aria-label="Drag to reorder"
@@ -80,13 +99,15 @@ export function KanbanCard({ task, isDragging }: KanbanCardProps) {
         <GripVertical className="w-3.5 h-3.5" />
       </button>
 
-      {/* Card content */}
-      <div className="flex items-start gap-2 pr-5">
+      <button
+        type="button"
+        className="flex w-full items-start gap-2 pr-5 text-left rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={(event) => onOpen?.(task, event.currentTarget)}
+        aria-label={`Open task: ${task.text}`}
+      >
         <StatusIcon status={task.status} />
-        <p className="text-sm text-foreground leading-snug line-clamp-3">
-          {task.text}
-        </p>
-      </div>
+        <span className="text-sm text-foreground leading-snug line-clamp-3">{task.text}</span>
+      </button>
 
       {/* Footer: tags + date */}
       <div className="mt-2.5 flex items-center gap-2 flex-wrap">
@@ -99,11 +120,45 @@ export function KanbanCard({ task, isDragging }: KanbanCardProps) {
             {tag}
           </Badge>
         ))}
+        {task.comment_count ? (
+          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground" aria-label={`${task.comment_count} comments`}>
+            <MessageCircle className="size-3" /> {task.comment_count}
+          </span>
+        ) : null}
+        {task.last_comment_at ? (
+          <span className="text-[10px] text-muted-foreground/70">Active {formatShortDate(task.last_comment_at)}</span>
+        ) : null}
         {task.date && (
           <span className="text-[10px] text-muted-foreground/50">
             {formatShortDate(task.date)}
           </span>
         )}
+        {onMove ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="ml-auto rounded-sm p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`Move ${task.text}`}
+                disabled={isMoving}
+              >
+                <MoreHorizontal className="size-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Move to</DropdownMenuLabel>
+              {STATUS_OPTIONS.map(([status, label]) => (
+                <DropdownMenuItem
+                  key={status}
+                  disabled={task.status === status}
+                  onSelect={() => onMove(task, status)}
+                >
+                  {label}{task.status === status ? " (current)" : ""}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </div>
     </div>
   );
@@ -114,7 +169,7 @@ export function KanbanCardOverlay({ task }: { task: Task }) {
   const tags = parseTags(task.tags as string | string[] | null);
 
   return (
-    <div className="rounded-lg border border-primary/60 bg-card p-3 shadow-xl ring-2 ring-primary/30 rotate-1 cursor-grabbing select-none">
+    <div className="rotate-1 cursor-grabbing select-none rounded-lg border border-primary/60 bg-card p-3 shadow-sm ring-2 ring-primary/30">
       <div className="flex items-start gap-2 pr-5">
         <StatusIcon status={task.status} />
         <p className="text-sm text-foreground leading-snug line-clamp-3">

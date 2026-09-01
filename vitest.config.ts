@@ -7,7 +7,10 @@ export default defineConfig({
   test: {
     environment: "happy-dom",
     globals: true,
+    fileParallelism: false,
+    maxWorkers: 1,
     setupFiles: ["./vitest.setup.ts"],
+    exclude: ["e2e/**", "node_modules/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],

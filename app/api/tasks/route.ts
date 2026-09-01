@@ -6,6 +6,7 @@ import {
 import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { logValidationFailure } from "@/lib/security-logger";
+import { authenticateTaskRequest } from "@/lib/task-auth";
 import { validateId, validateTask } from "@/lib/validation";
 
 // Kanban status values map to journal_entries status values
@@ -29,6 +30,8 @@ type TaskRow = {
 	sort_order: number;
 	created_at: string;
 	updated_at: string;
+	comment_count: number;
+	last_comment_at: string | null;
 };
 
 function normalizeTaskRow(task: TaskRow) {
@@ -54,6 +57,8 @@ export async function GET(req: NextRequest) {
 		maxRequests: 100,
 	});
 	if (limited) return limited;
+	const auth = await authenticateTaskRequest(req, "tasks:read");
+	if (!auth.ok) return auth.response;
 	const db = getDb();
 	const { searchParams } = new URL(req.url);
 	const statusParam = searchParams.get("status");
@@ -72,18 +77,22 @@ export async function GET(req: NextRequest) {
 
 	const placeholders = statusValues.map(() => "?").join(", ");
 	let query = `
-	    SELECT id, date, text, status, lane, priority, waiting_on, tags, collection_id, sort_order, created_at, updated_at
-	    FROM journal_entries
-	    WHERE signifier = 'task' AND status IN (${placeholders})`;
+	    SELECT je.id, je.date, je.text, je.status, je.lane, je.priority,
+	      je.waiting_on, je.tags, je.collection_id, je.sort_order, je.created_at,
+	      je.updated_at, COUNT(tc.id) AS comment_count, MAX(tc.created_at) AS last_comment_at
+	    FROM journal_entries je
+	    LEFT JOIN task_comments tc ON tc.task_id = je.id
+	    WHERE je.signifier = 'task' AND je.status IN (${placeholders})`;
 	const params: (string | number)[] = [...statusValues];
 
 	if (dateParam) {
-		query += ` AND date = ?`;
+		query += ` AND je.date = ?`;
 		params.push(dateParam);
 	}
 
 	query += `
-	    ORDER BY date DESC, sort_order ASC
+	    GROUP BY je.id
+	    ORDER BY je.date DESC, je.sort_order ASC
 	    LIMIT ?`;
 	params.push(limit);
 
@@ -98,6 +107,11 @@ export async function POST(req: NextRequest) {
 		maxRequests: 30,
 	});
 	if (limited) return limited;
+	const auth = await authenticateTaskRequest(req, "tasks:read");
+	if (!auth.ok) return auth.response;
+	if (auth.actor.type === "agent") {
+		return NextResponse.json({ error: "Agent task mutation is not permitted" }, { status: 403 });
+	}
 
 	const db = getDb();
 	const body = await req.json();
@@ -195,9 +209,11 @@ export async function POST(req: NextRequest) {
 
 		const created = db
 			.prepare(
-				`SELECT id, date, text, status, lane, priority, waiting_on, tags, collection_id, sort_order, created_at, updated_at
-				 FROM journal_entries
-				 WHERE id = ?`,
+				`SELECT je.id, je.date, je.text, je.status, je.lane, je.priority,
+				 je.waiting_on, je.tags, je.collection_id, je.sort_order, je.created_at,
+				 je.updated_at, COUNT(tc.id) AS comment_count, MAX(tc.created_at) AS last_comment_at
+				 FROM journal_entries je LEFT JOIN task_comments tc ON tc.task_id = je.id
+				 WHERE je.id = ? GROUP BY je.id`,
 			)
 			.get(id) as TaskRow;
 

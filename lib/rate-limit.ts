@@ -87,9 +87,30 @@ export function checkRateLimit(
  * }
  */
 export function rateLimitMiddleware(
-	_req: Request,
-	_config?: RateLimitConfig,
+	req: Request,
+	config: RateLimitConfig = { windowMs: 60000, maxRequests: 100 },
 ): Response | null {
-	// Rate limiting disabled — single-user local app
-	return null;
+	const ip = getClientIp(req);
+	const endpoint = new URL(req.url).pathname;
+	const result = checkRateLimit(`${ip}:${endpoint}`, config);
+	if (result.allowed) return null;
+
+	const retryAfter = Math.max(1, Math.ceil((result.resetTime - Date.now()) / 1000));
+	void logRateLimitExceeded(req, endpoint, {
+		limit: config.maxRequests,
+		windowMs: config.windowMs,
+	});
+
+	return Response.json(
+		{ error: "Too many requests", retryAfter },
+		{
+			status: 429,
+			headers: {
+				"Retry-After": String(retryAfter),
+				"X-RateLimit-Limit": String(config.maxRequests),
+				"X-RateLimit-Remaining": "0",
+				"X-RateLimit-Reset": String(Math.ceil(result.resetTime / 1000)),
+			},
+		},
+	);
 }

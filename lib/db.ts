@@ -1,227 +1,144 @@
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	unlinkSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import Database from "@/lib/sqlite";
 
-// Read from environment variables with fallback
-const DB_PATH = process.env.DATABASE_PATH || "./gutter-journal.db";
-const BACKUP_DIR = process.env.BACKUP_DIR || "./backups";
-const DB_DIR = dirname(DB_PATH);
+const CURRENT_SCHEMA_VERSION = 8;
 
-// Use globalThis to survive Next.js dev mode hot reloads
-// Without this, each hot reload creates a new connection and orphans the old WAL
-const globalForDb = globalThis as typeof globalThis & {
-	_db?: Database | null;
+type Migration = {
+	version: number;
+	up: (db: Database) => void;
 };
 
-let _db: Database | null = globalForDb._db || null;
+const globalForDb = globalThis as typeof globalThis & {
+	_db?: Database | null;
+	_dbPath?: string | null;
+};
 
-function ensureDirs() {
-	if (!existsSync(DB_DIR)) {
-		mkdirSync(DB_DIR, { recursive: true });
-	}
-	if (!existsSync(BACKUP_DIR)) {
-		mkdirSync(BACKUP_DIR, { recursive: true });
-	}
+let dbInstance: Database | null = globalForDb._db || null;
+let dbPath: string | null = globalForDb._dbPath || null;
+
+function hasColumn(db: Database, table: string, column: string): boolean {
+	return (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).some(
+		(item) => item.name === column,
+	);
 }
 
-function backupDatabase() {
-	if (!existsSync(DB_PATH)) return;
-
-	const timestamp = new Date().toISOString().replace(/:/g, "-").split(".")[0];
-	const backupPath = join(BACKUP_DIR, `journal-${timestamp}.db`);
-
-	try {
-		copyFileSync(DB_PATH, backupPath);
-
-		// Keep only last 7 daily backups
-		const fs = require("node:fs");
-		const backups = fs
-			.readdirSync(BACKUP_DIR)
-			.filter((f: string) => f.startsWith("journal-"))
-			.sort()
-			.reverse();
-
-		if (backups.length > 7) {
-			backups.slice(7).forEach((f: string) => {
-				fs.unlinkSync(join(BACKUP_DIR, f));
-			});
-		}
-	} catch (err) {
-		console.error("Backup failed:", err);
-	}
+function hasTable(db: Database, table: string): boolean {
+	return Boolean(
+		db
+			.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+			.get(table),
+	);
 }
 
-export function getDb(): Database {
-	if (!_db) {
-		ensureDirs();
-
-		const _isNew = !existsSync(DB_PATH);
-		_db = new Database(DB_PATH);
-
-		// WAL mode for better concurrency and crash resistance
-		_db.pragma("journal_mode = WAL");
-		_db.pragma("synchronous = NORMAL");
-		_db.pragma("cache_size = 10000");
-
-		// Checkpoint WAL on connection to ensure data is flushed to main DB
-		// This prevents data loss when Next.js dev mode hot-reloads modules
-		_db.pragma("wal_checkpoint(TRUNCATE)");
-		
-		// Enable foreign key constraints
-		_db.pragma("foreign_keys = ON");
-
-		// Create tables
-		_db.exec(`
-      CREATE TABLE IF NOT EXISTS journal_entries (
-        id TEXT PRIMARY KEY,
-        date TEXT NOT NULL,
-        signifier TEXT NOT NULL,
-        text TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'open',
-        lane TEXT,
-        priority TEXT,
-        waiting_on TEXT,
-        migrated_to TEXT,
-        migrated_from TEXT,
-        collection_id TEXT REFERENCES collections(id) ON DELETE SET NULL,
-        tags TEXT DEFAULT '[]',
-        sort_order INTEGER NOT NULL,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-      
-      CREATE INDEX IF NOT EXISTS idx_je_date ON journal_entries(date);
-      CREATE INDEX IF NOT EXISTS idx_je_status ON journal_entries(status);
-      CREATE INDEX IF NOT EXISTS idx_je_signifier ON journal_entries(signifier);
-      CREATE INDEX IF NOT EXISTS idx_je_collection ON journal_entries(collection_id);
-      CREATE INDEX IF NOT EXISTS idx_je_parent ON journal_entries(parent_id);
-      CREATE INDEX IF NOT EXISTS idx_je_sort ON journal_entries(date, sort_order);
-      CREATE INDEX IF NOT EXISTS idx_je_updated ON journal_entries(updated_at);
-      
-      CREATE TABLE IF NOT EXISTS collections (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        icon TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-      
-      CREATE TABLE IF NOT EXISTS future_log (
-        id TEXT PRIMARY KEY,
-        target_month TEXT NOT NULL,
-        signifier TEXT NOT NULL,
-        text TEXT NOT NULL,
-        migrated INTEGER DEFAULT 0,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-      
-      CREATE INDEX IF NOT EXISTS idx_fl_month ON future_log(target_month);
-      
-      CREATE TABLE IF NOT EXISTS projects (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        description TEXT,
-        color TEXT,
-        icon TEXT,
-        active INTEGER DEFAULT 1,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-      
-      CREATE INDEX IF NOT EXISTS idx_projects_active ON projects(active);
-
-      CREATE TABLE IF NOT EXISTS meeting_prep (
-        id TEXT PRIMARY KEY,
-        event_id TEXT NOT NULL,
-        occurrence_date TEXT,
-        title TEXT NOT NULL,
-        time TEXT,
-        calendar TEXT,
-        prep_notes TEXT,
-        prep_status TEXT DEFAULT 'none',
-        transcript TEXT,
-        summary TEXT,
-        action_items TEXT,
-        created_at TEXT DEFAULT (datetime('now')),
-        updated_at TEXT DEFAULT (datetime('now'))
-      );
-
-      CREATE TABLE IF NOT EXISTS jira_issues (
-        id TEXT PRIMARY KEY,
-        issue_key TEXT NOT NULL UNIQUE,
-        summary TEXT NOT NULL,
-        status TEXT NOT NULL,
-        priority TEXT,
-        assignee TEXT,
-        url TEXT,
-        updated TEXT,
-        synced_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_meeting_prep_event ON meeting_prep(event_id, occurrence_date);
-      CREATE INDEX IF NOT EXISTS idx_meeting_prep_status ON meeting_prep(prep_status);
-      CREATE INDEX IF NOT EXISTS idx_meeting_prep_date ON meeting_prep(occurrence_date);
-      CREATE INDEX IF NOT EXISTS idx_jira_issue_key ON jira_issues(issue_key);
-      CREATE INDEX IF NOT EXISTS idx_jira_status ON jira_issues(status);
-      CREATE INDEX IF NOT EXISTS idx_jira_priority ON jira_issues(priority);
-      CREATE INDEX IF NOT EXISTS idx_jira_synced_at ON jira_issues(synced_at);
-      CREATE INDEX IF NOT EXISTS idx_fl_migrated ON future_log(migrated);
-      
-      -- Metadata table to track schema version and backups
-      CREATE TABLE IF NOT EXISTS _meta (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      );
-      
-      INSERT OR IGNORE INTO _meta (key, value) VALUES ('schema_version', '1');
-      INSERT OR IGNORE INTO _meta (key, value) VALUES ('created_at', datetime('now'));
-    `);
-
-		// Migrations
-		const schemaVersion =
-			(
-				_db
-					.prepare("SELECT value FROM _meta WHERE key = 'schema_version'")
-					.get() as { value: string }
-			)?.value || "1";
-		if (parseInt(schemaVersion, 10) < 2) {
-			// Add parent_id column for subtasks
-			const columns = _db
-				.prepare("PRAGMA table_info(journal_entries)")
-				.all() as Array<{ name: string }>;
-			if (!columns.some((c) => c.name === "parent_id")) {
-				_db.exec(
+const migrations: Migration[] = [
+	{
+		version: 1,
+		up(db) {
+			db.exec(`
+				CREATE TABLE IF NOT EXISTS _meta (
+					key TEXT PRIMARY KEY,
+					value TEXT NOT NULL
+				);
+				CREATE TABLE IF NOT EXISTS collections (
+					id TEXT PRIMARY KEY,
+					title TEXT NOT NULL,
+					icon TEXT,
+					created_at TEXT NOT NULL DEFAULT (datetime('now'))
+				);
+				CREATE TABLE IF NOT EXISTS projects (
+					id TEXT PRIMARY KEY,
+					name TEXT NOT NULL,
+					description TEXT,
+					color TEXT,
+					icon TEXT,
+					active INTEGER DEFAULT 1,
+					created_at TEXT NOT NULL DEFAULT (datetime('now')),
+					updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+				);
+				CREATE TABLE IF NOT EXISTS journal_entries (
+					id TEXT PRIMARY KEY,
+					date TEXT NOT NULL,
+					signifier TEXT NOT NULL,
+					text TEXT NOT NULL,
+					status TEXT NOT NULL DEFAULT 'open',
+					migrated_to TEXT,
+					migrated_from TEXT,
+					collection_id TEXT REFERENCES collections(id) ON DELETE SET NULL,
+					tags TEXT DEFAULT '[]',
+					sort_order INTEGER NOT NULL,
+					created_at TEXT NOT NULL DEFAULT (datetime('now')),
+					updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+				);
+				CREATE TABLE IF NOT EXISTS future_log (
+					id TEXT PRIMARY KEY,
+					target_month TEXT NOT NULL,
+					signifier TEXT NOT NULL,
+					text TEXT NOT NULL,
+					migrated INTEGER DEFAULT 0,
+					created_at TEXT NOT NULL DEFAULT (datetime('now'))
+				);
+				CREATE TABLE IF NOT EXISTS meeting_prep (
+					id TEXT PRIMARY KEY,
+					event_id TEXT NOT NULL,
+					occurrence_date TEXT,
+					title TEXT NOT NULL,
+					time TEXT,
+					calendar TEXT,
+					prep_notes TEXT,
+					prep_status TEXT DEFAULT 'none',
+					transcript TEXT,
+					summary TEXT,
+					action_items TEXT,
+					created_at TEXT DEFAULT (datetime('now')),
+					updated_at TEXT DEFAULT (datetime('now'))
+				);
+				CREATE INDEX IF NOT EXISTS idx_je_date ON journal_entries(date);
+				CREATE INDEX IF NOT EXISTS idx_je_status ON journal_entries(status);
+				CREATE INDEX IF NOT EXISTS idx_je_signifier ON journal_entries(signifier);
+				CREATE INDEX IF NOT EXISTS idx_je_collection ON journal_entries(collection_id);
+				CREATE INDEX IF NOT EXISTS idx_je_sort ON journal_entries(date, sort_order);
+				CREATE INDEX IF NOT EXISTS idx_je_updated ON journal_entries(updated_at);
+				CREATE INDEX IF NOT EXISTS idx_fl_month ON future_log(target_month);
+				CREATE INDEX IF NOT EXISTS idx_fl_migrated ON future_log(migrated);
+				CREATE INDEX IF NOT EXISTS idx_projects_active ON projects(active);
+				CREATE UNIQUE INDEX IF NOT EXISTS idx_meeting_prep_event ON meeting_prep(event_id, occurrence_date);
+				CREATE INDEX IF NOT EXISTS idx_meeting_prep_status ON meeting_prep(prep_status);
+				CREATE INDEX IF NOT EXISTS idx_meeting_prep_date ON meeting_prep(occurrence_date);
+				INSERT OR IGNORE INTO _meta (key, value) VALUES ('created_at', datetime('now'));
+			`);
+		},
+	},
+	{
+		version: 2,
+		up(db) {
+			if (!hasColumn(db, "journal_entries", "parent_id")) {
+				db.exec(
 					"ALTER TABLE journal_entries ADD COLUMN parent_id TEXT REFERENCES journal_entries(id)",
 				);
 			}
-			_db
-				.prepare(
-					"INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', '2')",
-				)
-				.run();
-		}
-
-		if (parseInt(schemaVersion, 10) < 3) {
-			const columns = _db
-				.prepare("PRAGMA table_info(journal_entries)")
-				.all() as Array<{ name: string }>;
-			if (!columns.some((c) => c.name === "lane")) {
-				_db.exec("ALTER TABLE journal_entries ADD COLUMN lane TEXT");
+			db.exec("CREATE INDEX IF NOT EXISTS idx_je_parent ON journal_entries(parent_id)");
+		},
+	},
+	{
+		version: 3,
+		up(db) {
+			for (const column of ["lane", "priority", "waiting_on"]) {
+				if (!hasColumn(db, "journal_entries", column)) {
+					db.exec(`ALTER TABLE journal_entries ADD COLUMN ${column} TEXT`);
+				}
 			}
-			if (!columns.some((c) => c.name === "priority")) {
-				_db.exec("ALTER TABLE journal_entries ADD COLUMN priority TEXT");
-			}
-			if (!columns.some((c) => c.name === "waiting_on")) {
-				_db.exec("ALTER TABLE journal_entries ADD COLUMN waiting_on TEXT");
-			}
-			_db
-				.prepare(
-					"INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', '3')",
-				)
-				.run();
-		}
-
-		if (parseInt(schemaVersion, 10) < 4) {
-			_db.exec(`
+		},
+	},
+	{
+		version: 4,
+		up(db) {
+			db.exec(`
 				CREATE TABLE IF NOT EXISTS jira_issues (
 					id TEXT PRIMARY KEY,
 					issue_key TEXT NOT NULL UNIQUE,
@@ -238,76 +155,224 @@ export function getDb(): Database {
 				CREATE INDEX IF NOT EXISTS idx_jira_priority ON jira_issues(priority);
 				CREATE INDEX IF NOT EXISTS idx_jira_synced_at ON jira_issues(synced_at);
 			`);
-			_db
-				.prepare(
-					"INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', '4')",
-				)
-				.run();
-		}
-
-		if (parseInt(schemaVersion, 10) < 5) {
-			// Add ui_config column to morning_view_prompts for editable widget display config
-			const tableExists = _db
-				.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='morning_view_prompts'")
-				.get();
-			if (tableExists) {
-				const mvpCols = _db
-					.prepare("PRAGMA table_info(morning_view_prompts)")
-					.all() as Array<{ name: string }>;
-				if (!mvpCols.some((c) => c.name === "ui_config")) {
-					_db.exec("ALTER TABLE morning_view_prompts ADD COLUMN ui_config TEXT");
-				}
+		},
+	},
+	{
+		version: 5,
+		up(db) {
+			if (
+				hasTable(db, "morning_view_prompts") &&
+				!hasColumn(db, "morning_view_prompts", "ui_config")
+			) {
+				db.exec("ALTER TABLE morning_view_prompts ADD COLUMN ui_config TEXT");
 			}
-			_db
-				.prepare(
-					"INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', '5')",
-				)
-				.run();
-		}
-
-		// Data repair for legacy/capture-created rows that ended up with blank IDs.
-		// Without stable IDs, PATCH/DELETE appear to succeed but do nothing.
-		const rowsMissingIds = _db
-			.prepare(
-				"SELECT rowid FROM journal_entries WHERE id IS NULL OR TRIM(id) = ''",
-			)
-			.all() as Array<{ rowid: number }>;
-
-		if (rowsMissingIds.length > 0) {
-			for (const row of rowsMissingIds) {
-				const repairedId = `je-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-				_db
-					.prepare("UPDATE journal_entries SET id = ? WHERE rowid = ?")
-					.run(repairedId, row.rowid);
+		},
+	},
+	{
+		version: 6,
+		up(db) {
+			db.exec(`
+				CREATE TABLE IF NOT EXISTS morning_view_prompts (
+					id TEXT PRIMARY KEY,
+					title TEXT NOT NULL,
+					prompt_text TEXT NOT NULL,
+					source_type TEXT NOT NULL,
+					source_config TEXT,
+					frequency TEXT NOT NULL,
+					last_run TEXT,
+					active INTEGER DEFAULT 1,
+					sort_order INTEGER NOT NULL,
+					ui_config TEXT,
+					created_at TEXT NOT NULL DEFAULT (datetime('now')),
+					updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+				);
+				CREATE TABLE IF NOT EXISTS conversation_history (
+					id TEXT PRIMARY KEY,
+					date TEXT NOT NULL,
+					session_id TEXT NOT NULL,
+					role TEXT NOT NULL,
+					content TEXT NOT NULL,
+					created_at TEXT NOT NULL DEFAULT (datetime('now'))
+				);
+				CREATE INDEX IF NOT EXISTS idx_mvp_active ON morning_view_prompts(active);
+				CREATE INDEX IF NOT EXISTS idx_mvp_frequency ON morning_view_prompts(frequency);
+				CREATE INDEX IF NOT EXISTS idx_mvp_sort ON morning_view_prompts(sort_order);
+				CREATE INDEX IF NOT EXISTS idx_conv_session ON conversation_history(session_id);
+				CREATE INDEX IF NOT EXISTS idx_conv_date ON conversation_history(date);
+			`);
+		},
+	},
+	{
+		version: 7,
+		up(db) {
+			// collection_id is the journal entry relationship, so preserve legacy projects
+			// by materializing them as collections before project reads switch to collections.
+			if (hasTable(db, "projects")) {
+				db.exec(`
+					INSERT OR IGNORE INTO collections (id, title, icon, created_at)
+					SELECT id, name, icon, created_at FROM projects
+				`);
 			}
-			console.warn(
-				`[db] Repaired ${rowsMissingIds.length} journal entries with missing IDs`,
-			);
-		}
+			db.exec(`
+				UPDATE journal_entries SET status = 'done' WHERE status = 'complete';
+				UPDATE journal_entries SET status = 'in-progress' WHERE status = 'in_progress';
+			`);
+		},
+	},
+	{
+		version: 8,
+		up(db) {
+			db.exec(`
+				CREATE TABLE IF NOT EXISTS agent_credentials (
+					token_hash TEXT PRIMARY KEY,
+					actor_id TEXT NOT NULL,
+					scopes TEXT NOT NULL,
+					created_at TEXT NOT NULL DEFAULT (datetime('now')),
+					revoked_at TEXT
+				);
+				CREATE TABLE IF NOT EXISTS task_comments (
+					id TEXT PRIMARY KEY,
+					task_id TEXT NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+					body TEXT NOT NULL,
+					actor_type TEXT NOT NULL CHECK (actor_type IN ('human', 'agent', 'system')),
+					actor_id TEXT NOT NULL,
+					source_ref TEXT,
+					idempotency_key TEXT,
+					created_at TEXT NOT NULL DEFAULT (datetime('now')),
+					CHECK (actor_type != 'agent' OR idempotency_key IS NOT NULL),
+					UNIQUE (actor_id, idempotency_key)
+				);
+				CREATE INDEX IF NOT EXISTS idx_task_comments_task_created
+					ON task_comments(task_id, created_at, id);
+				CREATE INDEX IF NOT EXISTS idx_agent_credentials_actor
+					ON agent_credentials(actor_id);
+			`);
+		},
+	},
+];
 
-		// Backup on first connection of the day
-		const lastBackup = _db
+export function getSchemaVersion(db: Database): number {
+	if (!hasTable(db, "_meta")) return 0;
+	const row = db
+		.prepare("SELECT value FROM _meta WHERE key = 'schema_version'")
+		.get() as { value: string } | undefined;
+	return row ? Number.parseInt(row.value, 10) || 0 : 0;
+}
+
+export function runMigrations(db: Database): number {
+	let version = getSchemaVersion(db);
+
+	for (const migration of migrations) {
+		if (migration.version <= version) continue;
+		db.exec("BEGIN IMMEDIATE");
+		try {
+			migration.up(db);
+			db
+				.prepare("INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', ?)")
+				.run(String(migration.version));
+			db.exec("COMMIT");
+		} catch (error) {
+			db.exec("ROLLBACK");
+			throw error;
+		}
+		version = getSchemaVersion(db);
+		if (version !== migration.version) {
+			throw new Error(`Migration ${migration.version} did not persist its schema version`);
+		}
+	}
+
+	return version;
+}
+
+function sqliteString(value: string): string {
+	return `'${value.replaceAll("'", "''")}'`;
+}
+
+export function createDatabaseBackup(
+	db: Database,
+	backupDir = process.env.BACKUP_DIR || "./backups",
+): string {
+	mkdirSync(backupDir, { recursive: true });
+	const timestamp = new Date().toISOString().replaceAll(":", "-").replace(".", "-");
+	const destination = join(backupDir, `journal-${timestamp}.db`);
+
+	// VACUUM INTO asks SQLite to create a transactionally consistent snapshot.
+	// Unlike copying the main file, it includes committed pages still resident in WAL.
+	db.exec(`VACUUM INTO ${sqliteString(destination)}`);
+
+	const backups = readdirSync(backupDir)
+		.filter((file) => file.startsWith("journal-") && file.endsWith(".db"))
+		.sort()
+		.reverse();
+	for (const file of backups.slice(7)) unlinkSync(join(backupDir, file));
+	return destination;
+}
+
+function backupDatabase(db: Database, path: string) {
+	if (!existsSync(path) || process.env.NODE_ENV === "test") return null;
+	return createDatabaseBackup(db);
+}
+
+function repairMissingIds(db: Database) {
+	const rows = db
+		.prepare("SELECT rowid FROM journal_entries WHERE id IS NULL OR TRIM(id) = ''")
+		.all() as Array<{ rowid: number }>;
+	for (const row of rows) {
+		db
+			.prepare("UPDATE journal_entries SET id = ? WHERE rowid = ?")
+			.run(`je-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`, row.rowid);
+	}
+	if (rows.length > 0) console.warn(`[db] Repaired ${rows.length} journal entries with missing IDs`);
+}
+
+export function initializeDatabase(path: string): Database {
+	mkdirSync(dirname(path), { recursive: true });
+	const db = new Database(path);
+	db.pragma("journal_mode = WAL");
+	db.pragma("synchronous = NORMAL");
+	db.pragma("cache_size = 10000");
+	db.pragma("foreign_keys = ON");
+	runMigrations(db);
+	repairMissingIds(db);
+	return db;
+}
+
+export function closeDb() {
+	dbInstance?.close();
+	dbInstance = null;
+	dbPath = null;
+	globalForDb._db = null;
+	globalForDb._dbPath = null;
+}
+
+export function getDb(): Database {
+	const requestedPath = process.env.DATABASE_PATH || "./gutter-journal.db";
+	if (dbInstance && dbPath !== requestedPath) closeDb();
+	if (!dbInstance) {
+		const existed = existsSync(requestedPath);
+		dbInstance = initializeDatabase(requestedPath);
+		dbPath = requestedPath;
+		globalForDb._db = dbInstance;
+		globalForDb._dbPath = dbPath;
+
+		const lastBackup = dbInstance
 			.prepare("SELECT value FROM _meta WHERE key = 'last_backup'")
 			.get() as { value: string } | undefined;
 		const today = new Date().toISOString().split("T")[0];
-
-		if (!lastBackup || !lastBackup.value.startsWith(today)) {
-			backupDatabase();
-			_db
-				.prepare(
-					"INSERT OR REPLACE INTO _meta (key, value) VALUES ('last_backup', ?)",
-				)
+		if (existed && (!lastBackup || !lastBackup.value.startsWith(today))) {
+			backupDatabase(dbInstance, requestedPath);
+			dbInstance
+				.prepare("INSERT OR REPLACE INTO _meta (key, value) VALUES ('last_backup', ?)")
 				.run(new Date().toISOString());
 		}
-
-		// Persist to globalThis so hot reloads reuse the same connection
-		globalForDb._db = _db;
 	}
-
-	return _db;
+	return dbInstance;
 }
 
-// Manual backup trigger (can be called from API or UI)
-export function triggerBackup() {
-	backupDatabase();
+export function triggerBackup(): string | null {
+	const path = process.env.DATABASE_PATH || "./gutter-journal.db";
+	if (!existsSync(path)) return null;
+	return createDatabaseBackup(getDb());
 }
+
+export { CURRENT_SCHEMA_VERSION };

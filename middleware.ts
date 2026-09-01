@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifySessionToken } from "@/lib/session";
 
 const PUBLIC_PATHS = ["/login", "/api/auth", "/manifest.json", "/sw.js", "/offline.html"];
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Allow public paths, static assets, and Next.js internals
@@ -20,18 +21,17 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Localhost bypass — skip auth for direct local requests
-  const forwarded = req.headers.get("x-forwarded-for");
-  const clientIp = forwarded ? forwarded.split(",")[0].trim() : undefined;
-  const host = req.headers.get("host") ?? "";
-  if (clientIp === "127.0.0.1" || clientIp === "::1" || host.startsWith("localhost") || host.startsWith("127.0.0.1") || host.startsWith("[::1]") || host.startsWith("::1")) {
+  // Task agent credentials are verified, scoped, and resolved to an actor by
+  // the task API itself. No other API accepts this bearer-token path.
+  if (
+    (pathname === "/api/tasks" || pathname.startsWith("/api/tasks/")) &&
+    /^Bearer /i.test(req.headers.get("authorization") ?? "")
+  ) {
     return NextResponse.next();
   }
 
-  // Check session cookie
-  const session = req.cookies.get("gutter-session");
-
-  if (!session?.value || session.value.length !== 64) {
+  const session = req.cookies.get("gutter-session")?.value;
+  if (!(await verifySessionToken(session))) {
     // API routes get 401, pages get redirected
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
