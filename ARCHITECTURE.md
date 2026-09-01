@@ -1,6 +1,6 @@
 # Architecture
 
-Gutter is a Next.js 16 app router application with two SQLite databases, local AI via Ollama, and tight macOS Calendar integration. Built for low latency, local-first operation, and zero dependencies on cloud services.
+Gutter is a Next.js 16 app router application with one SQLite database, local AI via Ollama, and tight macOS Calendar integration. Built for low latency, local-first operation, and zero dependencies on cloud services.
 
 ---
 
@@ -24,25 +24,18 @@ bun                        →  Runtime and package manager
 
 ## Data Layer
 
-### Two SQLite Databases
+### SQLite Database
 
-Gutter uses two separate SQLite databases with WAL (Write-Ahead Logging) for concurrent read/write performance:
+Gutter uses one SQLite database in WAL mode for concurrent read/write performance.
 
-#### `gutter.db` — Main Database
-- **Path:** `$TASKS_DB_PATH` (default: `./gutter.db`)
+#### `gutter-journal.db`
+- **Path:** `$DATABASE_PATH` (default: `./gutter-journal.db`)
 - **Connection:** `lib/db.ts` → `getDb()`
-- **Tables:** `ideas`, `notes`, `calendar_events`, `chat_messages`, `meeting_prep`, `journal_entries`, `collections`, `future_log`
-
-#### `gutter-journal.db` — Journal Database (primary)
-- **Path:** `$JOURNAL_DB_PATH` (default: `./gutter-journal.db`)
-- **Connection:** `lib/db.ts` → `getDb()`
-- **Tables:** Same as above, plus `projects` and `_meta` (schema versioning)
+- **Tables:** `journal_entries`, `task_comments`, `agent_credentials`, `collections`, `projects`, `future_log`, `meeting_prep`, and supporting feature tables
 - **Features:** 
-  - Ordered, transactional schema migrations (current version: 7)
+  - Ordered, transactional schema migrations (current version: 8)
   - Automatic daily backups to `./backups/` (last 7 retained)
   - `_meta` table for version tracking
-
-**Why two databases?** Historical artifact. The journal DB is the canonical source for journal data — it has migrations, backups, and versioning. Future consolidation planned.
 
 **Schema details:** See [docs/DATABASE.md](docs/DATABASE.md)
 
@@ -94,6 +87,12 @@ Gutter uses two separate SQLite databases with WAL (Write-Ahead Logging) for con
 ---
 
 ## Request Flow Examples
+
+### Task conversation
+
+The `/kanban` page queries all active lifecycle statuses through RTK Query. Selecting a card opens a responsive detail drawer. Human comments authenticate with the signed session cookie; agents use a scoped bearer credential whose stable actor identity is derived server-side. Agent writes require an `Idempotency-Key`, and comments are append-only. Status moves update `journal_entries` optimistically and roll back in the client if the API rejects the mutation.
+
+Comments retain `actor_type`, `actor_id`, optional `source_ref`, and creation time. The schema prevents duplicate agent delivery with a unique actor/key pair and cascades comments only when their parent task is permanently deleted.
 
 ### 1. Natural Language Command
 
@@ -323,6 +322,7 @@ See [CONFIGURATION.md](CONFIGURATION.md) for full details.
 **Backups:**
 - Journal DB auto-backups daily to `./backups/` (last 7 retained)
 - Manual trigger: `triggerBackup()` from `lib/db.ts`
+- Snapshots use SQLite `VACUUM INTO`, so committed pages still in the WAL are included; raw file copying is not used
 
 **Monitoring:**
 - Failed auth attempts → `security.log`
@@ -335,7 +335,7 @@ See [CONFIGURATION.md](CONFIGURATION.md) for full details.
 
 Planned improvements:
 
-- **Consolidate databases** → Single `gutter.db` with migrations/backups from journal DB
+
 - **Graph database** → Neo4j, Memgraph, or SQLite + vector for entity relationships
 - **RAG with long-term context** → Embed all history, query across transcripts/notes/docs
 - **LLM router** → Swap Ollama/OpenAI/Claude/Gemini via env config

@@ -98,6 +98,23 @@ describe("database migrations", () => {
 		db.close();
 	});
 
+	it("rolls back a failed migration without advancing the schema version", () => {
+		const { path } = temporaryDatabase("rollback.db");
+		const db = new Database(path);
+		db.exec(`
+			CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+			INSERT INTO _meta (key, value) VALUES ('schema_version', '7');
+			CREATE TABLE task_comments (id TEXT PRIMARY KEY);
+		`);
+
+		expect(() => runMigrations(db)).toThrow();
+		expect(getSchemaVersion(db)).toBe(7);
+		expect(
+			db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_credentials'").get(),
+		).toBeUndefined();
+		db.close();
+	});
+
 	it("serves an empty task list from a newly bootstrapped database", async () => {
 		const { path } = temporaryDatabase("api.db");
 		const originalPath = process.env.DATABASE_PATH;

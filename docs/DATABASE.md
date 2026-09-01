@@ -81,6 +81,12 @@ Project metadata for tracking multi-step work.
 **Indexes:**
 - `idx_projects_active` — Active/archived filtering
 
+#### `task_comments`
+Append-only task conversation entries. `task_id` references `journal_entries.id` with `ON DELETE CASCADE`. Provenance is stored as `actor_type`, `actor_id`, and optional `source_ref`; agent comments must include an idempotency key. `UNIQUE(actor_id, idempotency_key)` makes retries safe for each stable agent identity.
+
+#### `agent_credentials`
+Scoped agent API identities. Only a SHA-256 token hash, stable actor ID, JSON scopes, creation time, and optional revocation time are stored. Plaintext bearer tokens are printed once when generated and are never persisted.
+
 #### `meeting_prep`
 Meeting preparation notes and transcripts.
 
@@ -190,9 +196,10 @@ When schema changes are needed:
 - Use prepared statements (prevents SQL injection + caching)
 
 ### Backup Strategy
-- Automatic backups triggered on journal writes (max 5 backups retained)
+- Automatic daily backups on first database connection (latest 7 retained)
 - Backups stored in `./backups/journal-{timestamp}.db`
-- Manual backup: `sqlite3 gutter-journal.db ".backup backups/manual-{date}.db"`
+- Application backups use SQLite `VACUUM INTO`, not filesystem copying, so committed WAL pages are included consistently
+- Manual application backup: call `triggerBackup()` from `lib/db.ts`
 
 ### Database Size
 - Current size: ~100KB - 1MB (typical for 1000 entries)
@@ -210,10 +217,12 @@ When schema changes are needed:
   - Consolidated to single database (gutter-journal.db)
   - Removed legacy gutter.db module
   - Migration script for safe data merge
+- **Schema 8** (2026-09-01): Task Threads
+  - Added append-only `task_comments` and scoped `agent_credentials`
+  - Added provenance, agent idempotency, indexes, and cascading task ownership
 
 ### Planned Changes
-- [ ] Add foreign key constraints (currently enabled but not enforced on all relationships)
-- [ ] Formal migrations system (currently ad-hoc ALTER TABLE in lib/db.ts)
+- [ ] Add foreign key constraints to remaining legacy relationships
 - [ ] Archive old entries (auto-archive entries >1 year old)
 - [ ] Vacuum automation (periodic VACUUM to reclaim space)
 

@@ -1,5 +1,4 @@
 import {
-	copyFileSync,
 	existsSync,
 	mkdirSync,
 	readdirSync,
@@ -285,17 +284,33 @@ export function runMigrations(db: Database): number {
 	return version;
 }
 
-function backupDatabase(path: string) {
-	if (!existsSync(path) || process.env.NODE_ENV === "test") return;
-	const backupDir = process.env.BACKUP_DIR || "./backups";
+function sqliteString(value: string): string {
+	return `'${value.replaceAll("'", "''")}'`;
+}
+
+export function createDatabaseBackup(
+	db: Database,
+	backupDir = process.env.BACKUP_DIR || "./backups",
+): string {
 	mkdirSync(backupDir, { recursive: true });
-	const timestamp = new Date().toISOString().replace(/:/g, "-").split(".")[0];
-	copyFileSync(path, join(backupDir, `journal-${timestamp}.db`));
+	const timestamp = new Date().toISOString().replaceAll(":", "-").replace(".", "-");
+	const destination = join(backupDir, `journal-${timestamp}.db`);
+
+	// VACUUM INTO asks SQLite to create a transactionally consistent snapshot.
+	// Unlike copying the main file, it includes committed pages still resident in WAL.
+	db.exec(`VACUUM INTO ${sqliteString(destination)}`);
+
 	const backups = readdirSync(backupDir)
-		.filter((file) => file.startsWith("journal-"))
+		.filter((file) => file.startsWith("journal-") && file.endsWith(".db"))
 		.sort()
 		.reverse();
 	for (const file of backups.slice(7)) unlinkSync(join(backupDir, file));
+	return destination;
+}
+
+function backupDatabase(db: Database, path: string) {
+	if (!existsSync(path) || process.env.NODE_ENV === "test") return null;
+	return createDatabaseBackup(db);
 }
 
 function repairMissingIds(db: Database) {
@@ -345,7 +360,7 @@ export function getDb(): Database {
 			.get() as { value: string } | undefined;
 		const today = new Date().toISOString().split("T")[0];
 		if (existed && (!lastBackup || !lastBackup.value.startsWith(today))) {
-			backupDatabase(requestedPath);
+			backupDatabase(dbInstance, requestedPath);
 			dbInstance
 				.prepare("INSERT OR REPLACE INTO _meta (key, value) VALUES ('last_backup', ?)")
 				.run(new Date().toISOString());
@@ -354,8 +369,10 @@ export function getDb(): Database {
 	return dbInstance;
 }
 
-export function triggerBackup() {
-	backupDatabase(process.env.DATABASE_PATH || "./gutter-journal.db");
+export function triggerBackup(): string | null {
+	const path = process.env.DATABASE_PATH || "./gutter-journal.db";
+	if (!existsSync(path)) return null;
+	return createDatabaseBackup(getDb());
 }
 
 export { CURRENT_SCHEMA_VERSION };

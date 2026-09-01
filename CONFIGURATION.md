@@ -83,7 +83,8 @@ BACKUP_DIR=/var/lib/gutter/backups
 
 **Backup behavior:**
 - Automatic daily backup on first connection
-- Retention: last 7 days
+- Retention: latest 7 snapshots
+- Uses SQLite `VACUUM INTO` for a transactionally consistent snapshot, including committed WAL pages
 - Manual trigger: call `triggerBackup()` in `lib/db.ts`
 
 ---

@@ -43,6 +43,7 @@ Gutter fixes this:
 - **Voice capture** — Driving? Walking? Hit the mic button, dump your thought, keep moving.
 - **Calendar integration** — Apple Calendar events show up in the monthly grid and day view. No switching apps.
 - **Jira triage** — See your backlog, create issues, mark done — all without leaving the log.
+- **Task Threads** — See every active task on one Kanban board, open its conversation drawer, and preserve human/agent context with provenance.
 - **Local-first** — Your data stays on your machine. Ollama runs locally. No cloud APIs harvesting your notes.
 
 **Built for ADHD:**
@@ -180,7 +181,7 @@ npx @joargp/accli calendars list
 - **PWA** — Installable, works offline
 - **Auth** — Single-user, password-protected, HTTP-only cookie, 30-day session
 - **Themes** — Cyberpink · Tokyo Night · Rose Pine
-- **Two DBs** — `gutter.db` for app data, `gutter-journal.db` for journal (easy to back up separately)
+- **SQLite persistence** — One WAL-mode `gutter-journal.db` with ordered migrations and consistent snapshots
 
 ---
 
@@ -194,7 +195,7 @@ cp .env.example .env
 
 | Variable | Description |
 |----------|-------------|
-| `AUTH_PASSWORD` | Login password (leave empty to disable) |
+| `AUTH_PASSWORD_HASH` | Bcrypt hash of the login password (leave empty to disable) |
 | `AUTH_SECRET` | Secret for session tokens |
 
 ### calendars
@@ -251,6 +252,7 @@ cp .env.example .env
 | `/collections` | Collections list |
 | `/collections/:id` | Collection detail |
 | `/migrate` | Migration review |
+| `/kanban` | All-active-task Kanban and conversation drawer |
 | `/login` | Auth |
 
 ## api
@@ -274,6 +276,9 @@ cp .env.example .env
 | `/api/meeting-prep/update` | POST | Update prep from external source |
 | `/api/collections` | GET/POST | List / create collections |
 | `/api/future-log` | GET/POST | Future log entries |
+| `/api/tasks` | GET/POST | List, create, complete, or move tasks |
+| `/api/tasks/:id` | GET | Task detail and comment activity |
+| `/api/tasks/:id/comments` | GET/POST | Read or append task comments |
 | `/api/integrations/jira/issues` | GET | Fetch Jira issues |
 | `/api/integrations/jira/create` | POST | Create Jira issue |
 | `/api/integrations/jira/sync` | POST | Force sync Jira cache |
@@ -364,8 +369,8 @@ gutter/
 | `[x]` | Collections — topic-specific pages |
 | `[ ]` | **Projects** — like collections but richer. Ties together transcripts, prep notes, tasks, and entries by feature or initiative. Queryable by LLM ("what have we discussed about auth in the last month?") |
 | `[ ]` | Automated project linking — entries and transcripts auto-tagged to the right project based on content |
-| `[ ]` | Project kanban — visual task board per project with status columns |
-| `[ ]` | Global kanban — all tasks across all projects in one board |
+| `[ ]` | Project-specific Kanban filtering |
+| `[x]` | Global Kanban — all active tasks with status movement and conversation drawers |
 
 ### AI
 

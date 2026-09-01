@@ -32,6 +32,12 @@ jobs:
       - name: Production build
         run: bun run build
 
+      - name: Install Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run browser journey
+        run: bun run test:e2e
+
       - name: Generate coverage report
         run: bun run test:coverage
         continue-on-error: true

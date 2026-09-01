@@ -30,6 +30,40 @@ test("capture → all-task board → conversation → status persists", async ({
   ]);
   await expect(page.getByText("Playwright note:")).toBeVisible();
 
+  const tasksResponse = await page.request.get("/api/tasks");
+  expect(tasksResponse.ok()).toBe(true);
+  const task = (await tasksResponse.json()).find(
+    (candidate: { text: string }) => candidate.text === title,
+  );
+  expect(task).toBeDefined();
+
+  const rejected = await page.request.get(`/api/tasks/${task.id}/comments`, {
+    headers: { Authorization: "Bearer invalid-agent-token" },
+  });
+  expect(rejected.status()).toBe(401);
+
+  const agentToken = process.env.GUTTER_E2E_AGENT_TOKEN;
+  if (!agentToken) throw new Error("GUTTER_E2E_AGENT_TOKEN is not configured");
+  const agentComment = {
+    body: "Agent verification comment",
+    source_ref: "playwright:task-conversation",
+  };
+  const agentHeaders = {
+    Authorization: `Bearer ${agentToken}`,
+    "Idempotency-Key": "playwright-agent-comment-1",
+  };
+  const firstAgentWrite = await page.request.post(`/api/tasks/${task.id}/comments`, {
+    headers: agentHeaders,
+    data: agentComment,
+  });
+  expect(firstAgentWrite.status()).toBe(201);
+  const retryAgentWrite = await page.request.post(`/api/tasks/${task.id}/comments`, {
+    headers: agentHeaders,
+    data: agentComment,
+  });
+  expect(retryAgentWrite.status()).toBe(200);
+  expect((await retryAgentWrite.json()).id).toBe((await firstAgentWrite.json()).id);
+
   await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: `Move ${title}` }).click();
   await Promise.all([
@@ -43,5 +77,9 @@ test("capture → all-task board → conversation → status persists", async ({
   const drawer = page.locator('[data-slot="sheet-content"]');
   await expect(drawer.getByText("In Progress", { exact: true })).toBeVisible();
   await expect(page.getByText("Playwright note:")).toBeVisible();
+  await expect(page.getByText("Agent verification comment")).toBeVisible();
+  await expect(page.getByText("Jynx", { exact: true })).toBeVisible();
+  await page.getByText("Provenance", { exact: true }).click();
+  await expect(page.getByText("playwright:task-conversation")).toBeVisible();
   await page.screenshot({ path: "test-results/task-conversation.png", fullPage: true });
 });
