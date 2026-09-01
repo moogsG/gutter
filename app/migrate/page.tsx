@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ArrowRight, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { JournalHeader } from "@/components/journal/JournalHeader";
 import { SignifierIcon } from "@/components/journal/SignifierIcon";
@@ -26,25 +26,14 @@ function getTodayDateString(): string {
 }
 
 export default function MigratePage() {
-	const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 	const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-	const month = formatMonth(currentMonth);
-	const { data: entries = [] } = useGetUnresolvedQuery(month);
+	const todayDate = getTodayDateString();
+	const { data: entries = [] } = useGetUnresolvedQuery({
+		before: todayDate,
+	});
 	const [migrateEntries] = useMigrateEntriesMutation();
 	const [updateEntry] = useUpdateEntryMutation();
-
-	const handlePrevMonth = () => {
-		const newMonth = new Date(currentMonth);
-		newMonth.setMonth(newMonth.getMonth() - 1);
-		setCurrentMonth(newMonth);
-	};
-
-	const handleNextMonth = () => {
-		const newMonth = new Date(currentMonth);
-		newMonth.setMonth(newMonth.getMonth() + 1);
-		setCurrentMonth(newMonth);
-	};
 
 	const handleToggleEntry = (id: string) => {
 		setSelectedIds((prev) =>
@@ -75,12 +64,6 @@ export default function MigratePage() {
 		updateEntry({ id, status: "killed" });
 	};
 
-	const monthName = currentMonth.toLocaleDateString("en-US", {
-		month: "long",
-		year: "numeric",
-	});
-	const todayDate = getTodayDateString();
-
 	useEffect(() => {
 		setSelectedIds((prev) => prev.filter((id) => entries.some((entry) => entry.id === id)));
 	}, [entries]);
@@ -88,38 +71,20 @@ export default function MigratePage() {
 	return (
 		<>
 			<JournalHeader
-				date={`${month}-01`}
-				onPrevDay={handlePrevMonth}
-				onNextDay={handleNextMonth}
-				onToday={() => setCurrentMonth(new Date())}
+				date={todayDate}
+				onPrevDay={() => {}}
+				onNextDay={() => {}}
+				onToday={() => {}}
 			/>
 			<div className="flex-1 overflow-auto p-3 sm:p-6">
 				<div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
-					<div className="flex items-center justify-between">
-						<div>
-							<h2 className="text-lg sm:text-2xl font-bold text-foreground">
-								Migration Review
-							</h2>
-							<p className="text-sm text-muted-foreground">{monthName}</p>
-						</div>
-						<div className="flex gap-1">
-							<Button
-								variant="ghost"
-								size="sm"
-								onClick={handlePrevMonth}
-								className="w-8 h-8 p-0"
-							>
-								<ChevronLeft className="w-4 h-4" />
-							</Button>
-							<Button
-								variant="ghost"
-								size="sm"
-								onClick={handleNextMonth}
-								className="w-8 h-8 p-0"
-							>
-								<ChevronRight className="w-4 h-4" />
-							</Button>
-						</div>
+					<div>
+						<h2 className="text-lg sm:text-2xl font-bold text-foreground">
+							Migration Review
+						</h2>
+						<p className="text-sm text-muted-foreground">
+							All unfinished entries from before today
+						</p>
 					</div>
 
 					{selectedIds.length > 0 && (
@@ -148,13 +113,13 @@ export default function MigratePage() {
 					<Card>
 						<CardHeader className="px-3 sm:px-6 pt-3 sm:pt-6 pb-2">
 							<CardTitle className="text-xs sm:text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-								Unresolved Entries ({entries.length})
+								Previous Unfinished Entries ({entries.length})
 							</CardTitle>
 						</CardHeader>
 						<CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
 							{entries.length === 0 ? (
 								<p className="text-sm text-muted-foreground text-center py-8">
-									No unresolved entries for this month.
+									No unfinished entries from previous days.
 								</p>
 							) : (
 								<div className="space-y-1">

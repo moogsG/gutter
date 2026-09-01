@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { MeetingPrep } from "@/types";
+import type { MeetingPrep, MeetingPrepQueueData } from "@/types";
 
 export const meetingPrepApi = createApi({
   reducerPath: "meetingPrepApi",
@@ -9,6 +9,11 @@ export const meetingPrepApi = createApi({
     getMeetingPrep: builder.query<{ meetings: MeetingPrep[] }, void>({
       query: () => "/meeting-prep",
       providesTags: ["MeetingPrep"],
+    }),
+    getMeetingPrepQueue: builder.query<MeetingPrepQueueData, string>({
+      query: (date) => `/meeting-prep/queue?date=${date}`,
+      providesTags: (result, error, date) => ["MeetingPrep", { type: "MeetingPrep", id: `queue-${date}` }],
+      keepUnusedDataFor: 60,
     }),
     requestPrep: builder.mutation<{ ok: boolean; id: string }, {
       eventId: string;
@@ -43,6 +48,7 @@ export const meetingPrepApi = createApi({
 
 export const {
   useGetMeetingPrepQuery,
+  useGetMeetingPrepQueueQuery,
   useRequestPrepMutation,
   useUploadTranscriptMutation,
 } = meetingPrepApi;

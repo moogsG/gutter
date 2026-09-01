@@ -6,6 +6,134 @@ import type {
   FutureLogEntry,
   SemanticSearchResult,
 } from "@/types/journal";
+import type { TodayFocusWidget } from "@/components/journal/today-focus/widget-types";
+
+export interface MorningViewPromptSummary {
+  id: string;
+  title: string;
+  prompt_text: string;
+  source_type: string;
+  source_config: string | null;
+  ui_config: string | null;
+  frequency: string;
+  active: number;
+  sort_order: number;
+  last_run: string | null;
+}
+
+export interface TodayFocusWidgetRefreshResponse {
+  promptId: string;
+  result: {
+    prompt: MorningViewPromptSummary;
+    content: string;
+    error?: string;
+    widget?: TodayFocusWidget;
+  };
+  cachedAt: string;
+}
+
+export interface HealthCutMealLogResponse {
+  ok: boolean;
+  entry: {
+    id: string;
+    date: string;
+    text: string;
+    created_at: string;
+  };
+}
+
+export interface HealthCutPrepLockResponse {
+  ok: boolean;
+  entry: {
+    id: string;
+    date: string;
+    text: string;
+    created_at: string;
+  };
+  targetDate: string;
+}
+
+export interface HealthCutCleanupResponse {
+  ok: boolean;
+  requestedDate: string;
+  category: "omad" | "workout" | "alcohol" | "prep" | "nutrition" | "other" | null;
+  killedCount: number;
+  remainingAudit: HealthCutQueryResponse["audit"];
+}
+
+export interface HealthCutQueryResponse {
+  requestedDate: string;
+  displayDate: string;
+  generatedAt: string;
+  mode: "cut" | "weekend";
+  counts: {
+    done: number;
+    remaining: number;
+    blocked: number;
+    total: number;
+  };
+  checkpoints: Array<{
+    id: string;
+    text: string;
+    status: "open" | "in-progress" | "blocked" | "done";
+    category: "omad" | "workout" | "alcohol" | "prep" | "nutrition" | "other";
+  }>;
+  mealLog: {
+    required: boolean;
+    completed: boolean;
+    prompt: string;
+    entriesCount: number;
+    latestEntry?: {
+      id: string;
+      text: string;
+      createdAt: string;
+    };
+  };
+  prepLock: {
+    targetDate: string;
+    completed: boolean;
+    prompt: string;
+    entriesCount: number;
+    latestEntry?: {
+      id: string;
+      text: string;
+      createdAt: string;
+    };
+  };
+  history: Array<{
+    date: string;
+    label: string;
+    total: number;
+    done: number;
+    remaining: number;
+    blocked: number;
+    mealLogged: boolean;
+  }>;
+  audit: {
+    unresolvedCount: number;
+    staleCount: number;
+    cleanupEligibleCount: number;
+    categoriesWithStale: number;
+    oldestOpenDate: string | null;
+    oldestOpenDays: number | null;
+    groups: Array<{
+      category: "omad" | "workout" | "alcohol" | "prep" | "nutrition" | "other";
+      unresolvedCount: number;
+      staleCount: number;
+      cleanupEligibleCount: number;
+      oldestOpenDate: string | null;
+      newestOpenDate: string | null;
+      items: Array<{
+        id: string;
+        date: string;
+        text: string;
+        status: "open" | "in-progress" | "blocked" | "done";
+        ageDays: number;
+      }>;
+    }>;
+    nextMove: string;
+  };
+}
 
 export const journalApi = createApi({
   reducerPath: "journalApi",
@@ -181,8 +309,8 @@ export const journalApi = createApi({
       }),
       invalidatesTags: ["JournalDay", "JournalMonth"],
     }),
-    getUnresolved: builder.query<JournalEntry[], string>({
-      query: (month) => `/journal/unresolved?month=${month}`,
+    getUnresolved: builder.query<JournalEntry[], { before: string }>({
+      query: ({ before }) => `/journal/unresolved?before=${before}`,
       providesTags: ["JournalMonth"],
     }),
     getCollections: builder.query<Collection[], void>({
@@ -223,6 +351,44 @@ export const journalApi = createApi({
       query: ({ q, limit = 5 }) =>
         `/search/semantic?q=${encodeURIComponent(q)}&limit=${limit}`,
     }),
+    getHealthCut: builder.query<HealthCutQueryResponse, string | void>({
+      query: (date) => (date ? `/health-cut?date=${date}` : "/health-cut"),
+      providesTags: (result, error, date) =>
+        date ? [{ type: "JournalDay", id: date }, "JournalMonth"] : ["JournalMonth"],
+    }),
+    refreshTodayFocusWidget: builder.mutation<TodayFocusWidgetRefreshResponse, string>({
+      query: (promptId) => ({
+        url: `/morning-view/summary?promptId=${encodeURIComponent(promptId)}&force=true`,
+        method: "GET",
+      }),
+    }),
+    submitHealthCutMealLog: builder.mutation<HealthCutMealLogResponse, { date: string; text: string; promptId?: string }>({
+      query: ({ date, text }) => ({
+        url: "/health-cut/meal-log",
+        method: "POST",
+        body: { date, text },
+      }),
+      invalidatesTags: (result, error, { date }) => [{ type: "JournalDay", id: date }, "JournalMonth"],
+    }),
+    submitHealthCutPrepLock: builder.mutation<HealthCutPrepLockResponse, { date: string; text: string }>({
+      query: ({ date, text }) => ({
+        url: "/health-cut/prep-lock",
+        method: "POST",
+        body: { date, text },
+      }),
+      invalidatesTags: (result, error, { date }) => [{ type: "JournalDay", id: date }, "JournalMonth"],
+    }),
+    cleanupHealthCutBacklog: builder.mutation<
+      HealthCutCleanupResponse,
+      { date: string; category?: "omad" | "workout" | "alcohol" | "prep" | "nutrition" | "other" }
+    >({
+      query: ({ date, category }) => ({
+        url: "/health-cut",
+        method: "POST",
+        body: { action: "cleanup-stale", date, category },
+      }),
+      invalidatesTags: (result, error, { date }) => [{ type: "JournalDay", id: date }, "JournalMonth"],
+    }),
   }),
 });
 
@@ -242,4 +408,9 @@ export const {
   useLazySearchEntriesQuery,
   useSemanticSearchQuery,
   useLazySemanticSearchQuery,
+  useGetHealthCutQuery,
+  useRefreshTodayFocusWidgetMutation,
+  useSubmitHealthCutMealLogMutation,
+  useSubmitHealthCutPrepLockMutation,
+  useCleanupHealthCutBacklogMutation,
 } = journalApi;

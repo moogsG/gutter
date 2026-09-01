@@ -22,6 +22,10 @@ interface JournalHeaderProps {
   onToday: () => void;
   captureOpen?: boolean;
   onCaptureChange?: (open: boolean) => void;
+  showCapture?: boolean;
+  showDateNav?: boolean;
+  title?: string;
+  subtitle?: string;
 }
 
 const themes = [
@@ -34,13 +38,41 @@ const themes = [
 
 const navLinks = [
   { href: "/", label: "Today" },
+  { href: "/tomorrow", label: "Tomorrow" },
+  { href: "/reset", label: "Reset" },
+  { href: "/meetings", label: "Meetings" },
+  { href: "/wip", label: "WIP" },
+  { href: "/projects", label: "Projects" },
+  { href: "/backlog", label: "Backlog" },
+  { href: "/radar", label: "Radar" },
+  { href: "/truth", label: "Truth" },
+  { href: "/sessions", label: "Sessions" },
+  { href: "/status", label: "Status" },
+  { href: "/linkedin", label: "LinkedIn" },
+  { href: "/health-cut", label: "Health" },
+  { href: "/habits", label: "Habits" },
+  { href: "/meal-plan", label: "Meals" },
+  { href: "/school", label: "School" },
+  { href: "/date-night", label: "Date Night" },
+  { href: "/chores", label: "Chores" },
   { href: "/month", label: "Monthly" },
   { href: "/future", label: "Future" },
   { href: "/collections", label: "Collections" },
   { href: "/kanban", label: "Kanban" },
 ];
 
-export function JournalHeader({ date, onPrevDay, onNextDay, onToday, captureOpen, onCaptureChange }: JournalHeaderProps) {
+export function JournalHeader({
+  date,
+  onPrevDay,
+  onNextDay,
+  onToday,
+  captureOpen,
+  onCaptureChange,
+  showCapture = true,
+  showDateNav = true,
+  title,
+  subtitle,
+}: JournalHeaderProps) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -67,21 +99,29 @@ export function JournalHeader({ date, onPrevDay, onNextDay, onToday, captureOpen
       {/* Top row: date nav + actions */}
       <div className="flex items-center justify-between px-3 py-2 sm:px-4 sm:py-3">
         <div className="flex items-center gap-2 sm:gap-4">
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={onPrevDay} className="w-8 h-8 p-0">
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={onToday} className="h-8 px-2 sm:px-3">
-              <Calendar className="w-3.5 h-3.5 sm:mr-2" />
-              <span className="hidden sm:inline">Today</span>
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onNextDay} className="w-8 h-8 p-0">
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
-          {/* Short date on mobile, long on desktop */}
-          <h1 className="text-sm font-semibold text-foreground sm:hidden">{formattedDate}</h1>
-          <h1 className="hidden sm:block text-lg font-semibold text-foreground">{formattedDateLong}</h1>
+          {showDateNav ? (
+            <>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={onPrevDay} className="w-8 h-8 p-0">
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={onToday} className="h-8 px-2 sm:px-3">
+                  <Calendar className="w-3.5 h-3.5 sm:mr-2" />
+                  <span className="hidden sm:inline">Today</span>
+                </Button>
+                <Button variant="ghost" size="sm" onClick={onNextDay} className="w-8 h-8 p-0">
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+              <h1 className="text-sm font-semibold text-foreground sm:hidden">{formattedDate}</h1>
+              <h1 className="hidden sm:block text-lg font-semibold text-foreground">{formattedDateLong}</h1>
+            </>
+          ) : (
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold text-foreground sm:text-lg">{title || "Journal"}</h1>
+              {subtitle ? <p className="mt-1 hidden text-xs text-muted-foreground sm:block">{subtitle}</p> : null}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-1">
@@ -142,21 +182,23 @@ export function JournalHeader({ date, onPrevDay, onNextDay, onToday, captureOpen
           </DropdownMenu>
 
           {/* Capture button */}
-          <Button
-            variant="outline"
-            size="sm"
-            className={cn(
-              "h-8 px-3 gap-2",
-              "bg-gradient-to-r from-primary/10 to-primary/5",
-              "border-primary/20 hover:border-primary/30",
-              "hover:from-primary/15 hover:to-primary/10",
-              "transition-all duration-200"
-            )}
-            onClick={() => onCaptureChange?.(true)}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Capture</span>
-          </Button>
+          {showCapture ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                "h-8 px-3 gap-2",
+                "bg-gradient-to-r from-primary/10 to-primary/5",
+                "border-primary/20 hover:border-primary/30",
+                "hover:from-primary/15 hover:to-primary/10",
+                "transition-all duration-200"
+              )}
+              onClick={() => onCaptureChange?.(true)}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Capture</span>
+            </Button>
+          ) : null}
 
           {/* Omni bar trigger */}
           <Button

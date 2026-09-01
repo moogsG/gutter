@@ -2,6 +2,7 @@
 
 import { ChevronLeft, ChevronRight, FileText, Mic } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CalendarRunwayPanel } from "@/components/journal/CalendarRunwayPanel";
 import { JournalHeader } from "@/components/journal/JournalHeader";
 import { MeetingDrawer } from "@/components/meeting/MeetingDrawer";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,23 @@ import type { CalendarEvent, MeetingPrep } from "@/types";
 
 function formatMonth(date: Date): string {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function getCancunTodayDate(): string {
+	const parts = new Intl.DateTimeFormat("en-US", {
+		timeZone: "America/Cancun",
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+	}).formatToParts(new Date());
+	const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+	return `${lookup.year}-${lookup.month}-${lookup.day}`;
+}
+
+function getRunwayAnchorDate(currentMonth: Date): string {
+	const today = getCancunTodayDate();
+	const monthStr = formatMonth(currentMonth);
+	return today.startsWith(monthStr) ? today : `${monthStr}-01`;
 }
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -401,6 +419,8 @@ export default function MonthlyLogPage() {
 					</div>
 				) : (
 					<div className="flex-1 flex flex-col min-h-0">
+						<CalendarRunwayPanel date={getRunwayAnchorDate(currentMonth)} />
+
 						{/* Day labels */}
 						<div className="grid grid-cols-7 border-b border-border/50">
 							{DAY_LABELS.map((label, i) => (

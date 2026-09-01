@@ -174,4 +174,96 @@ export interface DoNextWidgetUiConfig {
 
 export type DoNextWidget = TodayFocusWidgetBase<"journal_do_next", DoNextWidgetData, DoNextWidgetUiConfig>;
 
-export type TodayFocusWidget = CalendarWidget | WeatherWidget | UnresolvedTasksWidget | JiraWidget | DoNextWidget;
+export type HealthCutCheckpointCategory = "omad" | "workout" | "alcohol" | "prep" | "nutrition" | "other";
+
+export interface HealthCutCheckpoint {
+  id: string;
+  text: string;
+  status: "open" | "in-progress" | "blocked" | "done";
+  category: HealthCutCheckpointCategory;
+}
+
+export interface HealthCutMealLogEntry {
+  id: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface HealthCutMealLogGate {
+  required: boolean;
+  completed: boolean;
+  prompt: string;
+  entriesCount: number;
+  latestEntry?: HealthCutMealLogEntry;
+}
+
+export interface HealthCutWidgetData {
+  mode: "cut" | "weekend";
+  counts: {
+    done: number;
+    remaining: number;
+    blocked: number;
+    total: number;
+  };
+  checkpoints: HealthCutCheckpoint[];
+  mealLog: HealthCutMealLogGate;
+}
+
+export interface HealthCutWidgetUiConfig {
+  maxItems?: number;
+  showCategory?: boolean;
+}
+
+export type HealthCutWidget = TodayFocusWidgetBase<"health_cut", HealthCutWidgetData, HealthCutWidgetUiConfig>;
+
+export type SlackContextReason = "mention" | "thread" | "name" | "channel";
+
+export interface SlackContextItem {
+  channelId: string;
+  channelName: string;
+  threadTs: string;
+  latestTs: string;
+  title: string;
+  summary: string;
+  reason: SlackContextReason;
+  priorityScore: number;
+  participants: string[];
+  messageCount: number;
+  unreadishCount: number;
+  url: string;
+}
+
+export interface SlackContextWidgetData {
+  counts: {
+    mentions: number;
+    threads: number;
+    names: number;
+    channels: number;
+  };
+  priority: SlackContextItem[];
+  threads: SlackContextItem[];
+  updates: SlackContextItem[];
+  generatedAt?: string;
+  channelsScanned?: number;
+}
+
+export interface SlackContextWidgetUiConfig {
+  variant?: "grouped" | "compact";
+  maxPriority?: number;
+  maxThreads?: number;
+  maxUpdates?: number;
+  showParticipants?: boolean;
+  showRefreshButton?: boolean;
+  sourceLabel?: string;
+}
+
+export type SlackContextWidget = TodayFocusWidgetBase<"slack_context", SlackContextWidgetData, SlackContextWidgetUiConfig>;
+
+export type TodayFocusWidget =
+  | CalendarWidget
+  | WeatherWidget
+  | UnresolvedTasksWidget
+  | JiraWidget
+  | DoNextWidget
+  | HealthCutWidget
+  | SlackContextWidget;

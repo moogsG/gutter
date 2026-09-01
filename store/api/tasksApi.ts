@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { CalendarEvent, Task } from "@/types";
+import type { CalendarEvent, CalendarRunwayData, Task } from "@/types";
 
 export type KanbanStatus = "todo" | "in-progress" | "blocked" | "done";
 
@@ -10,6 +10,10 @@ export interface KanbanQueryArgs {
 
 export interface KanbanBoardQueryArgs {
   date?: string;
+}
+
+export interface CalendarRunwayQueryArgs {
+  date: string;
 }
 
 export interface MoveTaskPayload {
@@ -30,6 +34,11 @@ export const tasksApi = createApi({
     getCalendarMonth: builder.query<{ events: CalendarEvent[] }, string>({
       query: (month) => `/calendar?month=${month}`,
       providesTags: (result, error, month) => [{ type: "Calendar", id: month }],
+      keepUnusedDataFor: 30,
+    }),
+    getCalendarRunway: builder.query<CalendarRunwayData, CalendarRunwayQueryArgs>({
+      query: ({ date }) => `/calendar/runway?date=${date}`,
+      providesTags: (result, error, { date }) => [{ type: "Calendar", id: `runway-${date}` }],
       keepUnusedDataFor: 30,
     }),
     // Kanban: fetch all board tasks in a single request, then group client-side
@@ -59,6 +68,7 @@ export const tasksApi = createApi({
 export const {
   useGetCalendarQuery,
   useGetCalendarMonthQuery,
+  useGetCalendarRunwayQuery,
   useGetKanbanBoardTasksQuery,
   useMoveTaskMutation,
 } = tasksApi;

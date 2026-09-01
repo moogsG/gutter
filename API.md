@@ -595,6 +595,10 @@ Base URL: `http://localhost:3000` (default)
 {
   "eventId": "evt-456",
   "occurrenceDate": "2026-03-18",
+  "title": "Sprint Planning",
+  "time": "2026-03-18T10:00:00Z",
+  "calendar": "work",
+  "prepNotes": "Bring up QA backlog and confirm sprint goal tradeoffs.",
   "summary": "Discussed backlog, decided on sprint goals.",
   "actionItems": ["Item 1", "Item 2"]
 }
@@ -610,7 +614,8 @@ Base URL: `http://localhost:3000` (default)
 **Rate Limit:** None  
 **Auth Required:** No (intended for Jynx callbacks)  
 **Notes:**
-- Updates `meeting_prep` row by `event_id` + `occurrence_date`
+- Upserts `meeting_prep` by `event_id` + `occurrence_date`
+- If the meeting row does not exist yet, `title`, `time`, and `calendar` let the endpoint create it directly
 - All fields optional except `eventId`
 
 ---

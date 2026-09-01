@@ -6,7 +6,7 @@ import {
 import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { logValidationFailure } from "@/lib/security-logger";
-import { validateId } from "@/lib/validation";
+import { validateId, validateTask } from "@/lib/validation";
 
 // Kanban status values map to journal_entries status values
 const KANBAN_STATUS_MAP: Record<string, string[]> = {
@@ -15,6 +15,37 @@ const KANBAN_STATUS_MAP: Record<string, string[]> = {
 	blocked: ["blocked"],
 	done: ["done"],
 };
+
+type TaskRow = {
+	id: string;
+	date: string;
+	text: string;
+	status: string;
+	lane: string | null;
+	priority: string | null;
+	waiting_on: string | null;
+	tags: string | null;
+	collection_id: string | null;
+	sort_order: number;
+	created_at: string;
+	updated_at: string;
+};
+
+function normalizeTaskRow(task: TaskRow) {
+	return {
+		...task,
+		title: task.text,
+	};
+}
+
+function getLocalTaskDate() {
+	return new Intl.DateTimeFormat("en-CA", {
+		timeZone: "America/Cancun",
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+	}).format(new Date());
+}
 
 export async function GET(req: NextRequest) {
 	// Rate limit: 100 requests per minute
@@ -41,9 +72,9 @@ export async function GET(req: NextRequest) {
 
 	const placeholders = statusValues.map(() => "?").join(", ");
 	let query = `
-    SELECT id, date, text, status, tags, collection_id, sort_order, created_at, updated_at
-    FROM journal_entries
-    WHERE signifier = 'task' AND status IN (${placeholders})`;
+	    SELECT id, date, text, status, lane, priority, waiting_on, tags, collection_id, sort_order, created_at, updated_at
+	    FROM journal_entries
+	    WHERE signifier = 'task' AND status IN (${placeholders})`;
 	const params: (string | number)[] = [...statusValues];
 
 	if (dateParam) {
@@ -52,12 +83,12 @@ export async function GET(req: NextRequest) {
 	}
 
 	query += `
-    ORDER BY date DESC, sort_order ASC
-    LIMIT ?`;
+	    ORDER BY date DESC, sort_order ASC
+	    LIMIT ?`;
 	params.push(limit);
 
-	const tasks = db.prepare(query).all(...params);
-	return NextResponse.json(tasks);
+	const tasks = db.prepare(query).all(...params) as TaskRow[];
+	return NextResponse.json(tasks.map(normalizeTaskRow));
 }
 
 export async function POST(req: NextRequest) {
@@ -73,9 +104,104 @@ export async function POST(req: NextRequest) {
 	const { action, taskId } = body;
 
 	// Validate action parameter
-	const validActions = ["complete", "move"];
+	const validActions = ["add", "complete", "move"];
 	if (!action || !validActions.includes(action)) {
 		return handleValidationError("Invalid or missing action");
+	}
+
+	if (action === "add") {
+		const incomingPriority =
+			typeof body.task?.priority === "number"
+				? body.task.priority >= 3
+					? "high"
+					: body.task.priority <= 1
+						? "low"
+						: "medium"
+				: body.task?.priority === "normal"
+					? "medium"
+					: body.task?.priority;
+		const date =
+			typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date)
+				? body.date
+				: getLocalTaskDate();
+		const validation = validateTask({
+			title: body.task?.title ?? body.task?.text,
+			priority: incomingPriority,
+			status: body.task?.status,
+		});
+		if (!validation.valid) {
+			await logValidationFailure(req, "/api/tasks", {
+				field: "task",
+				error: validation.errors.join(", "),
+			});
+			return handleValidationError(
+				"Invalid task payload",
+				validation.errors.join(", "),
+			);
+		}
+
+		const title = validation.sanitized?.title;
+		if (!title) {
+			return handleValidationError("task.title or task.text is required");
+		}
+
+		const priority =
+			validation.sanitized?.priority === "medium"
+				? "normal"
+				: validation.sanitized?.priority === "urgent"
+					? "high"
+					: validation.sanitized?.priority ?? "normal";
+		const status = validation.sanitized?.status ?? "open";
+		const lane =
+			typeof body.task?.lane === "string" &&
+			["work", "personal", "family", "jw", "petalz"].includes(body.task.lane)
+				? body.task.lane
+				: null;
+		const waitingOn =
+			typeof body.task?.waiting_on === "string"
+				? body.task.waiting_on.trim() || null
+				: typeof body.task?.waitingOn === "string"
+					? body.task.waitingOn.trim() || null
+					: null;
+		const tags = Array.isArray(body.task?.tags)
+			? body.task.tags.filter((tag: unknown): tag is string => typeof tag === "string")
+			: [];
+		const maxOrder = db
+			.prepare(
+				"SELECT MAX(sort_order) as max FROM journal_entries WHERE date = ? AND signifier = 'task'",
+			)
+			.get(date) as { max: number | null };
+		const sortOrder = (maxOrder?.max ?? -1) + 1;
+		const id = `je-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+		const now = new Date().toISOString();
+
+		db.prepare(
+			`INSERT INTO journal_entries
+			 (id, date, signifier, text, status, lane, priority, waiting_on, tags, sort_order, created_at, updated_at)
+			 VALUES (?, ?, 'task', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		).run(
+			id,
+			date,
+			title,
+			status,
+			lane,
+			priority,
+			waitingOn,
+			JSON.stringify(tags),
+			sortOrder,
+			now,
+			now,
+		);
+
+		const created = db
+			.prepare(
+				`SELECT id, date, text, status, lane, priority, waiting_on, tags, collection_id, sort_order, created_at, updated_at
+				 FROM journal_entries
+				 WHERE id = ?`,
+			)
+			.get(id) as TaskRow;
+
+		return NextResponse.json({ ok: true, task: normalizeTaskRow(created) });
 	}
 
 	// Validate taskId

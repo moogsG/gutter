@@ -15,27 +15,31 @@ export async function GET(req: NextRequest) {
 	});
 	if (limited) return limited;
 
-	const month = req.nextUrl.searchParams.get("month");
+	const before = req.nextUrl.searchParams.get("before");
 
-	if (!month) {
-		return handleValidationError("Month required (YYYY-MM)");
+	if (!before) {
+		return handleValidationError("before date required (YYYY-MM-DD)");
+	}
+
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(before)) {
+		return handleValidationError("Invalid before date format. Use YYYY-MM-DD");
 	}
 
 	try {
 		const db = getDb();
 
-		// Get all unresolved tasks and appointments from the month
+		// Get unresolved tasks and appointments from any previous day.
 		const entries = db
 			.prepare(
 				`SELECT id, date, signifier, text, status, migrated_to, migrated_from, 
                 collection_id, tags, sort_order, created_at, updated_at 
          FROM journal_entries 
-         WHERE date LIKE ? 
+         WHERE date < ?
            AND (signifier = 'task' OR signifier = 'appointment')
-           AND status = 'open'
+           AND status IN ('open', 'in-progress', 'blocked')
          ORDER BY date ASC, sort_order ASC`,
 			)
-			.all(`${month}%`) as JournalEntry[];
+			.all(before) as JournalEntry[];
 
 		// Parse tags JSON
 		const parsed = entries.map((e) => ({

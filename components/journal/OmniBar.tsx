@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Command } from "cmdk";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   Calendar,
   BookOpen,
   ArrowRight,
@@ -18,7 +19,10 @@ import {
   Clock,
   Kanban,
   Keyboard,
+  MoonStar,
   Settings2,
+  Home,
+  Linkedin,
 } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
@@ -35,6 +39,13 @@ interface OmniBarProps {
 
 const NAV_ITEMS = [
   { id: "daily", label: "Daily Log", href: "/", icon: Calendar, keywords: ["today", "daily", "log", "home"] },
+  { id: "reset", label: "Evening Reset", href: "/reset", icon: MoonStar, keywords: ["reset", "evening", "shutdown", "wrap", "tomorrow"] },
+  { id: "meetings", label: "Meeting Runway", href: "/meetings", icon: Clock, keywords: ["meeting", "prep", "runway", "calendar", "context"] },
+  { id: "wip", label: "WIP Limit", href: "/wip", icon: AlertTriangle, keywords: ["wip", "in progress", "work in progress", "focus", "current", "active tasks"] },
+  { id: "radar", label: "Follow-Through Radar", href: "/radar", icon: AlertTriangle, keywords: ["radar", "follow through", "promises", "blocked", "waiting", "carryover"] },
+  { id: "linkedin", label: "LinkedIn Cockpit", href: "/linkedin", icon: Linkedin, keywords: ["linkedin", "posts", "content", "hooks", "analytics", "authority", "audience"] },
+  { id: "chores", label: "Chore Cycle", href: "/chores", icon: Home, keywords: ["chores", "family", "house", "cleaning", "bathroom", "office"] },
+  { id: "school", label: "Homeschool Runway", href: "/school", icon: BookOpen, keywords: ["school", "homeschool", "kids", "reading", "math", "family learning"] },
   { id: "month", label: "Monthly Log", href: "/month", icon: Layers, keywords: ["month", "monthly", "overview", "calendar"] },
   { id: "future", label: "Future Log", href: "/future", icon: ArrowRight, keywords: ["future", "upcoming", "plan", "schedule"] },
   { id: "collections", label: "Collections", href: "/collections", icon: BookOpen, keywords: ["collections", "lists", "groups"] },

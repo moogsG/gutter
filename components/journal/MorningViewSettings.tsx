@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Check, X, GripVertical, Settings2, Calendar, ListChecks, Cloud, Briefcase, Zap } from "lucide-react";
+import { Plus, Trash2, Check, X, GripVertical, Settings2, Calendar, ListChecks, Cloud, Briefcase, Zap, MessageSquareText, HeartPulse } from "lucide-react";
 import { toast } from "sonner";
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { WidgetConfigEditor, hasWidgetConfig, defaultUiConfig } from "./WidgetConfigEditor";
@@ -27,11 +28,31 @@ interface MorningViewPrompt {
   last_run: string | null;
 }
 
+interface RecommendedStackAudit {
+  presetId: "jynx-recommended";
+  label: string;
+  description: string;
+  counts: {
+    ready: number;
+    stale: number;
+    missing: number;
+  };
+  prompts: Array<{
+    sourceType: string;
+    title: string;
+    state: "missing" | "stale" | "ready";
+    reason: string;
+  }>;
+}
+
 type UiConfigState = Record<string, unknown>;
 
 export function MorningViewSettings() {
   const [prompts, setPrompts] = useState<MorningViewPrompt[]>([]);
+  const [recommendedPreset, setRecommendedPreset] = useState<RecommendedStackAudit | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPresetLoading, setIsPresetLoading] = useState(true);
+  const [isApplyingPreset, setIsApplyingPreset] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
 
@@ -49,20 +70,24 @@ export function MorningViewSettings() {
     static: Settings2,
     journal_unresolved: ListChecks,
     journal_do_next: Zap,
+    health_cut: HeartPulse,
     calendar_today: Calendar,
     meeting_prep_today: Calendar,
     weather: Cloud,
     jira_assigned: Briefcase,
+    slack_context: MessageSquareText,
   };
   
   const sourceTypeLabels = {
     static: "Static Reminder",
     journal_unresolved: "Unresolved Tasks",
     journal_do_next: "Do Next (Working Set)",
+    health_cut: "Health Cut",
     calendar_today: "Today's Calendar",
     meeting_prep_today: "Meeting Prep",
     weather: "Weather",
     jira_assigned: "Jira Issues",
+    slack_context: "Slack Context",
   };
 
   const loadPrompts = async () => {
@@ -80,8 +105,24 @@ export function MorningViewSettings() {
     }
   };
 
+  const loadPresetAudit = async () => {
+    try {
+      const response = await fetch("/api/morning-view/presets");
+      if (!response.ok) throw new Error("Failed to load preset audit");
+
+      const data = await response.json();
+      setRecommendedPreset(data.preset ?? null);
+    } catch (error) {
+      console.error("Error loading Today Focus preset audit:", error);
+      toast.error("Failed to load Today Focus quickstart");
+    } finally {
+      setIsPresetLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadPrompts();
+    loadPresetAudit();
   }, []);
 
   /** Merge in layout defaults for any source type that doesn't already have them */
@@ -221,6 +262,30 @@ export function MorningViewSettings() {
     }
   };
 
+  const handleApplyRecommended = async () => {
+    setIsApplyingPreset(true);
+    try {
+      const response = await fetch("/api/morning-view/presets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ presetId: "jynx-recommended" }),
+      });
+
+      if (!response.ok) throw new Error("Failed to apply preset");
+
+      const data = await response.json();
+      setRecommendedPreset(data.preset ?? null);
+      toast.success("Jynx recommended stack applied");
+      await loadPrompts();
+      await loadPresetAudit();
+    } catch (error) {
+      console.error("Error applying Today Focus preset:", error);
+      toast.error("Failed to apply recommended stack");
+    } finally {
+      setIsApplyingPreset(false);
+    }
+  };
+
   const handleToggleActive = async (prompt: MorningViewPrompt) => {
     try {
       const response = await fetch("/api/morning-view/prompts", {
@@ -296,6 +361,61 @@ export function MorningViewSettings() {
         </Button>
       </div>
 
+      <Card className="bg-card/60 border-primary/15">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between gap-3 text-base">
+            <span>Quickstart Stack</span>
+            {!isPresetLoading && recommendedPreset ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <Badge variant={recommendedPreset.counts.missing > 0 ? "destructive" : recommendedPreset.counts.stale > 0 ? "outline" : "secondary"}>
+                  {recommendedPreset.counts.ready} ready
+                </Badge>
+                {recommendedPreset.counts.stale > 0 ? <Badge variant="outline">{recommendedPreset.counts.stale} stale</Badge> : null}
+                {recommendedPreset.counts.missing > 0 ? <Badge variant="destructive">{recommendedPreset.counts.missing} missing</Badge> : null}
+              </div>
+            ) : null}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isPresetLoading ? (
+            <p className="text-sm text-muted-foreground">Checking whether Today Focus is actually configured or just pretending.</p>
+          ) : recommendedPreset ? (
+            <>
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium text-foreground">{recommendedPreset.label}</p>
+                <p className="text-sm text-muted-foreground">{recommendedPreset.description}</p>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                {recommendedPreset.prompts.map((prompt) => (
+                  <div key={prompt.sourceType} className="rounded-lg border border-border/60 bg-muted/25 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-foreground">{prompt.title}</p>
+                      <Badge variant={prompt.state === "ready" ? "secondary" : prompt.state === "stale" ? "outline" : "destructive"}>
+                        {prompt.state}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{prompt.reason}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button onClick={handleApplyRecommended} disabled={isApplyingPreset}>
+                  <Zap className="w-4 h-4 mr-2" />
+                  {isApplyingPreset ? "Repairing..." : "Apply Jynx Recommended"}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Repairs the five dependable daily widgets without deleting the rest of your custom prompts.
+                </p>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Preset audit unavailable right now.</p>
+          )}
+        </CardContent>
+      </Card>
+
       {isAdding && (
         <Card className="bg-card/60 border-2 border-primary/20">
           <CardHeader>
@@ -335,10 +455,12 @@ export function MorningViewSettings() {
                   <option value="static">Static Reminder</option>
                   <option value="journal_unresolved">Unresolved Tasks</option>
                   <option value="journal_do_next">Do Next (Working Set)</option>
+                  <option value="health_cut">Health Cut</option>
                   <option value="calendar_today">Today&apos;s Calendar</option>
                   <option value="meeting_prep_today">Meeting Prep</option>
                   <option value="weather">Weather</option>
                   <option value="jira_assigned">Jira Issues</option>
+                  <option value="slack_context">Slack Context</option>
                 </select>
               </div>
 
@@ -425,10 +547,12 @@ export function MorningViewSettings() {
                   <option value="static">Static Reminder</option>
                   <option value="journal_unresolved">Unresolved Tasks</option>
                   <option value="journal_do_next">Do Next (Working Set)</option>
+                  <option value="health_cut">Health Cut</option>
                   <option value="calendar_today">Today&apos;s Calendar</option>
                   <option value="meeting_prep_today">Meeting Prep</option>
                   <option value="weather">Weather</option>
                   <option value="jira_assigned">Jira Issues</option>
+                  <option value="slack_context">Slack Context</option>
                 </select>
               </div>
 

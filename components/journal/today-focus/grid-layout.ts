@@ -67,6 +67,10 @@ function getDefaultColSpan(widget?: TodayFocusWidget): 2 | 4 | 8 {
       return 4;
     case "journal_unresolved":
       return widget.uiConfig?.variant === "compact" ? 4 : 8;
+    case "health_cut":
+      return 4;
+    case "slack_context":
+      return widget.uiConfig?.variant === "compact" ? 4 : 8;
     default:
       return 8;
   }

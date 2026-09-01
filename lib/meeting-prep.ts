@@ -11,8 +11,11 @@
  * - Google: Limited (tools not yet implemented in llm-router)
  */
 
+import { getDateNightData } from "@/lib/date-night";
 import { generateCompletion, getLLMInfo, type LLMTool, type LLMMessage } from "@/lib/llm-router";
 import { searchMeetingContext } from "@/lib/vector-store";
+
+type MeetingPrepMode = "work" | "relationship" | "spiritual" | "personal";
 
 // ─── Vector context helper ────────────────────────────────────────────
 
@@ -44,6 +47,180 @@ function parseSlackChannels(): string {
 			return `- ${id} = #${name}`;
 		})
 		.join("\n");
+}
+
+function formatMeetingDate(time: string): string {
+	const parsed = new Date(time);
+	if (Number.isNaN(parsed.getTime())) return time;
+	return parsed.toLocaleString("en-US", {
+		weekday: "long",
+		month: "long",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+	});
+}
+
+function getOccurrenceDate(time: string): string {
+	const parsed = new Date(time);
+	if (Number.isNaN(parsed.getTime())) {
+		return new Date().toISOString().split("T")[0];
+	}
+	return parsed.toISOString().split("T")[0];
+}
+
+function classifyMeetingPrep(calendar: string, title: string): MeetingPrepMode {
+	const lowerCalendar = calendar.toLowerCase();
+	const lowerTitle = title.toLowerCase();
+
+	if (lowerCalendar === "gradient" || lowerCalendar === "calendar") {
+		return "work";
+	}
+
+	if (
+		lowerTitle.includes("jess") ||
+		lowerTitle.includes("date") ||
+		lowerTitle.includes("check-in")
+	) {
+		return "relationship";
+	}
+
+	if (
+		lowerCalendar === "jw" ||
+		lowerTitle.includes("watchtower") ||
+		lowerTitle.includes("public talk") ||
+		lowerTitle.includes("theocratic school")
+	) {
+		return "spiritual";
+	}
+
+	return "personal";
+}
+
+async function generateRelationshipPrep(
+	title: string,
+	time: string,
+	context?: string,
+): Promise<string> {
+	const requestedDate = getOccurrenceDate(time);
+	const relationship = await getDateNightData(requestedDate);
+	const nextMoves = relationship.partner.nextMoves.length
+		? relationship.partner.nextMoves.map((move) => `- ${move}`).join("\n")
+		: "- Show up calm, present, and willing to listen before you defend yourself.";
+	const favorites = relationship.partner.favorites
+		.map((item) => `- ${item}`)
+		.join("\n");
+	const questions = relationship.prep?.questions.length
+		? relationship.prep.questions
+				.slice(0, 4)
+				.map((question) => `- ${question}`)
+				.join("\n")
+		: "- What has felt heavy lately that we keep skating past?\n- What would help you feel more connected this week?\n- What do you want more of from us besides default-TV gravity?";
+	const tips = relationship.prep?.tips.length
+		? relationship.prep.tips.map((tip) => `- ${tip}`).join("\n")
+		: "- Listen longer than feels comfortable.\n- Do not turn everything into logistics.\n- Leave with one concrete next move on the calendar.";
+	const latestGesture = relationship.lastGesture
+		? `${relationship.lastGesture.date} — ${relationship.lastGesture.gesture} (${relationship.lastGesture.cost})`
+		: "No recent gesture logged.";
+	const extraContext = context?.trim()
+		? `\n## Added Context\n${context.trim()}\n`
+		: "";
+
+	return `# ${title}
+**When:** ${formatMeetingDate(time)}
+**Why this matters:** Relationship support gets fake fast when this stays as a calendar label instead of a real conversation.
+
+## Current Signal
+- Status: ${relationship.status}
+- Headline: ${relationship.headline}
+- Next event on deck: ${relationship.nextEvent?.title || "None found"}
+- Last logged gesture: ${latestGesture}
+
+## Best Moves Before You Walk In
+${nextMoves}
+
+## Questions Worth Asking
+${questions}
+
+## Jess Context To Remember
+${favorites}
+
+## How Not To Fumble It
+${tips}
+${extraContext}
+## Done Means
+- You leave with one concrete plan or date on the calendar.
+- Any promise or follow-up gets captured in Gutter instead of trusted to your sloppy memory.
+`;
+}
+
+function generateSpiritualPrep(
+	title: string,
+	time: string,
+	context?: string,
+): string {
+	const lowerTitle = title.toLowerCase();
+	const focusSection = lowerTitle.includes("public talk")
+		? `## Public Talk Focus
+- Confirm the theme, timing, and main through-line before rehearsal.
+- Tighten the opening and closing so they land clean instead of wandering.
+- Rehearse out loud with a timer, not just in your head.
+`
+		: lowerTitle.includes("theocratic school")
+			? `## School Focus
+- Confirm assignment type, timing, and source material.
+- Practice transitions and any demonstration parts out loud.
+- Trim notes enough that you can speak naturally.
+`
+			: `## Meeting Focus
+- Confirm what material or assignment is tied to this meeting.
+- Review the one point you want fresh in your head.
+- Set out notes and anything needed before the last-minute scramble.
+`;
+	const extraContext = context?.trim()
+		? `\n## Added Context\n${context.trim()}\n`
+		: "";
+
+	return `# ${title}
+**When:** ${formatMeetingDate(time)}
+**Why this matters:** Spiritual prep gets uglier when it stays vague until the same day.
+
+## Tonight's Prep Checklist
+- Confirm exact assignment, material, and duration.
+- Pick the single main point you want to deliver clearly.
+- Rehearse once out loud before the day gets noisy.
+- Set out notes, Bible, clothes, and anything else now.
+
+${focusSection}${extraContext}## Done Means
+- You know your opening line.
+- You know your closing line.
+- You are not relying on adrenaline to rescue weak prep.
+`;
+}
+
+function generatePersonalPrep(
+	title: string,
+	time: string,
+	context?: string,
+): string {
+	const extraContext = context?.trim()
+		? `\n## Added Context\n${context.trim()}\n`
+		: "";
+
+	return `# ${title}
+**When:** ${formatMeetingDate(time)}
+
+## Prep Checklist
+- Clarify the purpose of this event in one sentence.
+- Decide what outcome would make it worth the time.
+- Gather anything you need before the day starts.
+- Leave one note for your future self in Gutter if there is follow-up.
+${extraContext}
+## Keep It Simple
+- Show up prepared.
+- Capture the next action.
+- Do not make future-you clean up preventable confusion.
+`;
 }
 
 // ─── Tool definitions ────────────────────────────────────────────────
@@ -290,7 +467,7 @@ async function executeTool(
 
 // ─── Main generation function ────────────────────────────────────────
 
-export async function generateMeetingPrep(
+async function generateWorkMeetingPrep(
 	title: string,
 	time: string,
 	calendar: string,
@@ -379,4 +556,22 @@ Use the tools to search for relevant information, then write prep notes.`,
 	});
 
 	return finalResponse.content || "Failed to generate prep notes.";
+}
+
+export async function generateMeetingPrep(
+	title: string,
+	time: string,
+	calendar: string,
+	context?: string,
+): Promise<string> {
+	switch (classifyMeetingPrep(calendar, title)) {
+		case "relationship":
+			return generateRelationshipPrep(title, time, context);
+		case "spiritual":
+			return generateSpiritualPrep(title, time, context);
+		case "personal":
+			return generatePersonalPrep(title, time, context);
+		default:
+			return generateWorkMeetingPrep(title, time, calendar, context);
+	}
 }

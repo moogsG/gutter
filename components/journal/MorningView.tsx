@@ -32,6 +32,9 @@ interface SummaryMeta {
   cached?: boolean;
   cachedAt?: string;
   nextRefreshAt?: string;
+  requestedDate?: string;
+  todayDate?: string;
+  dateMode?: "today" | "past" | "future";
 }
 
 interface MorningViewProps {
@@ -51,6 +54,17 @@ const SOURCE_ICONS = {
 function parseUiConfig(raw: string | null | undefined): Record<string, unknown> {
   if (!raw) return {};
   try { return JSON.parse(raw); } catch { return {}; }
+}
+
+function getCancunTodayDate(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Cancun",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${lookup.year}-${lookup.month}-${lookup.day}`;
 }
 
 function getCellClasses(result: PromptResult): string {
@@ -85,12 +99,21 @@ export function MorningView({ date, onOpenCapture }: MorningViewProps) {
   const loadSummary = async (force = false) => {
     try {
       setError(null);
-      const url = force ? "/api/morning-view/summary?force=true" : "/api/morning-view/summary";
+      const params = new URLSearchParams({ date });
+      if (force) params.set("force", "true");
+      const url = `/api/morning-view/summary?${params.toString()}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error("Failed to load summary");
       const data = await response.json();
       setResults(data.results || []);
-      setMeta({ cached: data.cached, cachedAt: data.cachedAt, nextRefreshAt: data.nextRefreshAt });
+      setMeta({
+        cached: data.cached,
+        cachedAt: data.cachedAt,
+        nextRefreshAt: data.nextRefreshAt,
+        requestedDate: data.requestedDate,
+        todayDate: data.todayDate,
+        dateMode: data.dateMode,
+      });
     } catch (err) {
       console.error("Error loading Today Focus:", err);
       setError(err instanceof Error ? err.message : "Failed to load Today Focus");
@@ -171,6 +194,8 @@ export function MorningView({ date, onOpenCapture }: MorningViewProps) {
   }
 
   const sortedResults = sortResults(results);
+  const todayDate = meta.todayDate || getCancunTodayDate();
+  const isDateAwareContext = date !== todayDate;
 
   return (
     <section className="border-b border-border bg-card/30 px-3 py-4 sm:px-4">
@@ -191,6 +216,14 @@ export function MorningView({ date, onOpenCapture }: MorningViewProps) {
             </Button>
           </div>
         </div>
+
+        {isDateAwareContext ? (
+          <div className="rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs text-muted-foreground">
+            {meta.dateMode === "past"
+              ? `Viewing ${date}. Calendar, meeting prep, and health widgets are scoped to that day. Task/work widgets still show live context so the board does not fake a historical snapshot.`
+              : `Viewing ${date}. Date-specific widgets are scoped to that day, while task/work widgets stay live so tomorrow-planning does not pretend the future already happened.`}
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-8 gap-3 auto-rows-auto items-start">
           {sortedResults.map((result) => {

@@ -13,7 +13,7 @@ interface WidgetConfigEditorProps {
   onChange: (config: UiConfigState) => void;
 }
 
-const WIDGET_SOURCE_TYPES = new Set(["calendar_today", "weather", "journal_unresolved", "jira_assigned", "journal_do_next"]);
+const WIDGET_SOURCE_TYPES = new Set(["calendar_today", "weather", "journal_unresolved", "jira_assigned", "journal_do_next", "health_cut", "slack_context"]);
 
 export function hasWidgetConfig(sourceType: string): boolean {
   return WIDGET_SOURCE_TYPES.has(sourceType);
@@ -31,6 +31,10 @@ export function defaultUiConfig(sourceType: string): UiConfigState {
       return { variant: "grouped", maxItemsPerSection: 3, showPriority: true, showStatus: true, colSpan: 8, heightMode: "single", order: 0 };
     case "journal_do_next":
       return { variant: "focused", maxInProgress: 3, maxOpen: 3, showLane: true, colSpan: 8, heightMode: "single", order: 0 };
+    case "health_cut":
+      return { maxItems: 6, showCategory: true, colSpan: 4, heightMode: "single", order: 0 };
+    case "slack_context":
+      return { variant: "grouped", maxPriority: 4, maxThreads: 4, maxUpdates: 4, showParticipants: true, showRefreshButton: true, sourceLabel: "Slack", colSpan: 8, heightMode: "double", order: 0 };
     default:
       // Non-widget prompts still get layout defaults
       return { colSpan: 8, heightMode: "single", order: 0 };
@@ -297,6 +301,113 @@ export function WidgetConfigEditor({ sourceType, uiConfig, onChange }: WidgetCon
             checked={(uiConfig.showLane as boolean) ?? true}
             onCheckedChange={(v) => set("showLane", v)}
           />
+        </div>
+        <LayoutFootprintSection uiConfig={uiConfig} onChange={onChange} />
+      </div>
+    );
+  }
+
+  if (sourceType === "health_cut") {
+    return (
+      <div className="space-y-3">
+        <div className="space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Widget Display</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Max checkpoints</Label>
+              <Input
+                type="number"
+                min={1}
+                max={10}
+                value={(uiConfig.maxItems as number) ?? 6}
+                onChange={(e) => set("maxItems", Number(e.target.value))}
+                className="h-9"
+              />
+            </div>
+          </div>
+          <SwitchRow
+            label="Show category labels"
+            checked={(uiConfig.showCategory as boolean) ?? true}
+            onCheckedChange={(v) => set("showCategory", v)}
+          />
+        </div>
+        <LayoutFootprintSection uiConfig={uiConfig} onChange={onChange} />
+      </div>
+    );
+  }
+
+  if (sourceType === "slack_context") {
+    return (
+      <div className="space-y-3">
+        <div className="space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Widget Display</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Variant</Label>
+              <select
+                value={(uiConfig.variant as string) ?? "grouped"}
+                onChange={(e) => set("variant", e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="grouped">Grouped — attention / threads / updates</option>
+                <option value="compact">Compact — dense activity list</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Source label</Label>
+              <Input
+                type="text"
+                value={(uiConfig.sourceLabel as string) ?? "Slack"}
+                onChange={(e) => set("sourceLabel", e.target.value)}
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Max priority</Label>
+              <Input
+                type="number"
+                min={1}
+                max={10}
+                value={(uiConfig.maxPriority as number) ?? 4}
+                onChange={(e) => set("maxPriority", Number(e.target.value))}
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Max threads</Label>
+              <Input
+                type="number"
+                min={1}
+                max={10}
+                value={(uiConfig.maxThreads as number) ?? 4}
+                onChange={(e) => set("maxThreads", Number(e.target.value))}
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1.5 col-span-2">
+              <Label className="text-xs">Max updates</Label>
+              <Input
+                type="number"
+                min={1}
+                max={10}
+                value={(uiConfig.maxUpdates as number) ?? 4}
+                onChange={(e) => set("maxUpdates", Number(e.target.value))}
+                className="h-9"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <SwitchRow
+              label="Show participants"
+              checked={(uiConfig.showParticipants as boolean) ?? true}
+              onCheckedChange={(v) => set("showParticipants", v)}
+            />
+            <SwitchRow
+              label="Show widget refresh button"
+              checked={(uiConfig.showRefreshButton as boolean) ?? true}
+              onCheckedChange={(v) => set("showRefreshButton", v)}
+            />
+          </div>
         </div>
         <LayoutFootprintSection uiConfig={uiConfig} onChange={onChange} />
       </div>

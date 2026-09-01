@@ -132,6 +132,7 @@ JOURNAL_COMMAND_MODEL=qwen3:latest
 | `CALENDARS` | `Calendar` | Comma-separated list of calendar names to sync |
 | `ACCLI_CMD` | `accli` | Path to accli binary (auto-detected if in PATH) |
 | `CALENDAR_ENABLED` | `true` | Enable/disable calendar integration |
+| `CALENDAR_DEFAULT_NAME` | `Home` | Default calendar used when creating events without explicit calendar |
 
 **Example:**
 ```env
@@ -145,6 +146,12 @@ CALENDAR_ENABLED=true
 2. Grant Calendar permissions: `npx @joargp/accli calendars list`
 3. List your calendars: `npx @joargp/accli calendars list`
 4. Add calendar names to `CALENDARS` (exact match, case-sensitive)
+
+**Google Calendar as sync hub (recommended for Apple + Docker workflows):**
+- Add your Google account in macOS Calendar (System Settings → Internet Accounts).
+- Google calendars will appear in Apple Calendar and can be read/written via `accli`.
+- Set those Google calendar names in `CALENDARS` and `CALENDAR_DEFAULT_NAME`.
+- See [docs/GOOGLE-CALENDAR-HUB-SETUP.md](docs/GOOGLE-CALENDAR-HUB-SETUP.md).
 
 **Linux users:**
 Set `CALENDAR_ENABLED=false` (Apple Calendar is macOS-only).

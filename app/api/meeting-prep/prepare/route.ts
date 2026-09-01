@@ -4,6 +4,11 @@ import { getDb } from "@/lib/db";
 import { generateMeetingPrep } from "@/lib/meeting-prep";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
+function isWorkMeeting(calendar: string | undefined): boolean {
+	const lower = (calendar || "").toLowerCase();
+	return lower === "gradient" || lower === "calendar";
+}
+
 // POST: Request prep for a meeting — generates via Ollama with tool calling
 export async function POST(request: NextRequest) {
 	// Tight rate limit for expensive LLM operations (10 per minute)
@@ -60,7 +65,36 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		// Fire and forget — generate prep in background, update DB when done
+		if (!isWorkMeeting(calendar)) {
+			try {
+				const prepNotes = await generateMeetingPrep(
+					title,
+					time,
+					calendar,
+					context,
+				);
+
+				db.prepare(
+					"UPDATE meeting_prep SET prep_notes = ?, prep_status = ?, updated_at = ? WHERE id = ?",
+				).run(prepNotes, "ready", new Date().toISOString(), id);
+
+				return Response.json({ ok: true, id, status: "ready" });
+			} catch (err: any) {
+				console.error(
+					`[meeting-prep] Failed to generate prep for "${title}":`,
+					err.message,
+				);
+				db.prepare(
+					"UPDATE meeting_prep SET prep_status = ?, updated_at = ? WHERE id = ?",
+				).run("failed", new Date().toISOString(), id);
+				return Response.json(
+					{ error: "Failed to generate prep" },
+					{ status: 500 },
+				);
+			}
+		}
+
+		// Work meetings still generate in the background because they may need tool-driven LLM context.
 		(async () => {
 			try {
 				const prepNotes = await generateMeetingPrep(

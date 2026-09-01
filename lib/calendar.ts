@@ -12,6 +12,18 @@ export const RETRY_DELAY_MS = parseInt(
 	process.env.CALENDAR_RETRY_DELAY_MS || "1000",
 	10,
 );
+export const COMMAND_TIMEOUT_MS = parseInt(
+	process.env.CALENDAR_COMMAND_TIMEOUT_MS || "15000",
+	10,
+);
+export const READ_RETRY_ATTEMPTS = parseInt(
+	process.env.CALENDAR_READ_RETRY_ATTEMPTS || "1",
+	10,
+);
+export const READ_TIMEOUT_MS = parseInt(
+	process.env.CALENDAR_READ_TIMEOUT_MS || "5000",
+	10,
+);
 export const CACHE_DURATION_MS = parseInt(
 	process.env.CALENDAR_CACHE_DURATION_MS || "300000",
 	10,
@@ -46,39 +58,49 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+interface RetryOptions {
+	attempts?: number;
+	timeoutMs?: number;
+	updateStatus?: boolean;
+}
+
 export async function executeWithRetry(
 	cmd: string,
-	attempts = RETRY_ATTEMPTS,
+	options: RetryOptions = {},
 ): Promise<string> {
+	const attempts = options.attempts ?? RETRY_ATTEMPTS;
+	const timeoutMs = options.timeoutMs ?? COMMAND_TIMEOUT_MS;
+	const updateStatus = options.updateStatus ?? true;
+
 	for (let i = 0; i < attempts; i++) {
 		try {
 			const output = execSync(cmd, {
-				timeout: 15000,
+				timeout: timeoutMs,
 				encoding: "utf-8",
 				env: { ...process.env, PATH: process.env.PATH },
 			});
 
-			// Log success
-			calendarCache.lastSync = Date.now();
-			calendarCache.lastSuccess = true;
-			calendarCache.lastError = null;
+			if (updateStatus) {
+				calendarCache.lastSync = Date.now();
+				calendarCache.lastSuccess = true;
+				calendarCache.lastError = null;
+			}
 
 			return output;
 		} catch (error) {
 			const errMsg = error instanceof Error ? error.message : String(error);
 			console.error(`[Calendar] Attempt ${i + 1}/${attempts} failed:`, errMsg);
 
-			// Update cache
-			calendarCache.lastSync = Date.now();
-			calendarCache.lastSuccess = false;
-			calendarCache.lastError = errMsg;
+			if (updateStatus) {
+				calendarCache.lastSync = Date.now();
+				calendarCache.lastSuccess = false;
+				calendarCache.lastError = errMsg;
+			}
 
-			// If this is the last attempt, throw
 			if (i === attempts - 1) {
 				throw error;
 			}
 
-			// Wait before retrying (exponential backoff)
 			await sleep(RETRY_DELAY_MS * (i + 1));
 		}
 	}
@@ -143,34 +165,65 @@ export async function fetchCalendarEvents(
 	try {
 		const { getCalendarNames } = await import("@/lib/calendars");
 		const calendarNames = getCalendarNames();
-		const allEvents: CalendarEvent[] = [];
-
-		// Fetch events from each calendar
-		for (let i = 0; i < calendarNames.length; i++) {
-			const calName = calendarNames[i];
-			try {
-				const cmd = `${ACCLI} events "${calName}" --from ${from}T00:00:00 --to ${to}T23:59:59 --json`;
-				const output = await executeWithRetry(cmd);
-				const parsed = JSON.parse(output.trim());
-				const events = parsed.events || parsed || [];
-
-				for (const e of events) {
-					allEvents.push({
-						id: e.id || `${e.title || e.summary}-${e.startDate || e.start}`,
-						summary: e.title || e.summary || "Untitled Event",
-						startDate: e.startDate || e.start || "",
-						endDate: e.endDate || e.end || "",
-						allDay: e.allDay || e.isAllDay || false,
-						calendar: calName,
-						location: e.location,
+		const previousCache =
+			eventCache && eventCache.key === cacheKey ? eventCache : null;
+		const settledCalendars = await Promise.all(
+			calendarNames.map(async (calName) => {
+				try {
+					const cmd = `${ACCLI} events "${calName}" --from ${from}T00:00:00 --to ${to}T23:59:59 --json`;
+					const output = await executeWithRetry(cmd, {
+						attempts: READ_RETRY_ATTEMPTS,
+						timeoutMs: READ_TIMEOUT_MS,
+						updateStatus: false,
 					});
+					const parsed = JSON.parse(output.trim());
+					const events = parsed.events || parsed || [];
+
+					return {
+						calName,
+						ok: true as const,
+						events: events.map((e: any) => ({
+							id: e.id || `${e.title || e.summary}-${e.startDate || e.start}`,
+							summary: e.title || e.summary || "Untitled Event",
+							startDate: e.startDate || e.start || "",
+							endDate: e.endDate || e.end || "",
+							allDay: e.allDay || e.isAllDay || false,
+							calendar: calName,
+							location: e.location,
+						})),
+					};
+				} catch (error) {
+					const errMsg = error instanceof Error ? error.message : String(error);
+					console.error(`[Calendar] Skipping ${calName}:`, errMsg);
+					return {
+						calName,
+						ok: false as const,
+						events: [] as CalendarEvent[],
+						error: errMsg,
+					};
 				}
-			} catch (_calError) {
-				// Skip calendar on error
+			}),
+		);
+
+		const allEvents = settledCalendars.flatMap((result) => result.events);
+		const failedCalendars = settledCalendars.filter((result) => !result.ok);
+
+		calendarCache.lastSync = Date.now();
+		calendarCache.lastSuccess = failedCalendars.length < calendarNames.length;
+		calendarCache.lastError =
+			failedCalendars.length > 0
+				? failedCalendars
+						.map((result) => `${result.calName}: ${result.error}`)
+						.join(" | ")
+				: null;
+
+		if (allEvents.length === 0 && failedCalendars.length === calendarNames.length) {
+			if (previousCache) {
+				return { ok: true, data: previousCache.data };
 			}
+			return { ok: false, error: calendarCache.lastError || "Calendar unavailable" };
 		}
 
-		// Update cache
 		eventCache = {
 			data: allEvents,
 			timestamp: Date.now(),
@@ -195,6 +248,11 @@ export async function fetchCalendarEvents(
 export async function getTodayEvents(): Promise<CalendarEvent[]> {
 	const today = new Date().toISOString().split('T')[0];
 	const result = await fetchCalendarEvents(today, today);
+	return result.data || [];
+}
+
+export async function getEventsForDate(date: string): Promise<CalendarEvent[]> {
+	const result = await fetchCalendarEvents(date, date);
 	return result.data || [];
 }
 

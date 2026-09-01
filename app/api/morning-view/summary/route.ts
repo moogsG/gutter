@@ -7,11 +7,15 @@ import {
   getCacheStatus,
   initBackgroundScheduler,
 } from "@/lib/today-focus-cache";
+import { formatCancunIsoDate, getHealthCutData } from "@/lib/health-cut";
 
 interface SummaryResponse {
   results: PromptResult[];
   totalPrompts: number;
   ranPrompts: number;
+  requestedDate: string;
+  todayDate: string;
+  dateMode: "today" | "past" | "future";
 }
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { generateCompletion } from "@/lib/llm-router";
@@ -20,8 +24,11 @@ import type {
   CalendarWidget,
   DoNextItem,
   DoNextWidget,
+  HealthCutWidget,
   JiraWidget,
   JiraWidgetItem,
+  SlackContextItem,
+  SlackContextWidget,
   TodayFocusWidget,
   UnresolvedTaskItem,
   UnresolvedTasksWidget,
@@ -37,6 +44,38 @@ interface MorningViewPrompt {
   ui_config: string | null;
   frequency: string;
   last_run: string | null;
+}
+
+interface SummaryContext {
+  requestedDate: string;
+  todayDate: string;
+  isToday: boolean;
+  isPast: boolean;
+  isFuture: boolean;
+}
+
+function isValidIsoDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function toNoonDate(value: string): Date {
+  return new Date(`${value}T12:00:00`);
+}
+
+function getSummaryContext(requestedDate?: string | null): SummaryContext {
+  const todayDate = formatCancunIsoDate();
+  const normalizedRequestedDate =
+    requestedDate && isValidIsoDate(requestedDate) ? requestedDate : todayDate;
+  const requestedTime = toNoonDate(normalizedRequestedDate).getTime();
+  const todayTime = toNoonDate(todayDate).getTime();
+
+  return {
+    requestedDate: normalizedRequestedDate,
+    todayDate,
+    isToday: normalizedRequestedDate === todayDate,
+    isPast: requestedTime < todayTime,
+    isFuture: requestedTime > todayTime,
+  };
 }
 
 function parseUiConfig<T extends object>(raw: string | null, defaults: T): T {
@@ -180,10 +219,9 @@ function buildJiraSummary(issues: JiraSummaryRow[]): string {
   return parts.join("\n\n");
 }
 
-function shouldRunToday(prompt: MorningViewPrompt): boolean {
+function shouldRunForDate(prompt: MorningViewPrompt, context: SummaryContext): boolean {
   const { frequency } = prompt;
-  const today = new Date();
-  const dayOfWeek = today.getDay();
+  const dayOfWeek = toNoonDate(context.requestedDate).getDay();
 
   switch (frequency) {
     case "daily":
@@ -272,7 +310,7 @@ async function buildJournalUnresolvedWidget(prompt: MorningViewPrompt): Promise<
   };
 }
 
-async function buildCalendarTodayWidget(prompt: MorningViewPrompt): Promise<CalendarWidget> {
+async function buildCalendarTodayWidget(prompt: MorningViewPrompt, context: SummaryContext): Promise<CalendarWidget> {
   const uiCfg = parseUiConfig(prompt.ui_config, {
     variant: "timeline" as const,
     maxItems: 5,
@@ -281,8 +319,8 @@ async function buildCalendarTodayWidget(prompt: MorningViewPrompt): Promise<Cale
   const maxItems = uiCfg.maxItems ?? 5;
 
   try {
-    const { getTodayEvents } = await import("@/lib/calendar");
-    const events = await getTodayEvents();
+    const { getEventsForDate } = await import("@/lib/calendar");
+    const events = await getEventsForDate(context.requestedDate);
     const sortedEvents = [...events].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
 
     return {
@@ -326,7 +364,7 @@ function fToC(f: number): number {
   return Math.round((f - 32) * 5 / 9);
 }
 
-async function buildWeatherWidget(prompt: MorningViewPrompt): Promise<WeatherWidget> {
+async function buildWeatherWidget(prompt: MorningViewPrompt, context: SummaryContext): Promise<WeatherWidget> {
   const uiCfg = parseUiConfig(prompt.ui_config, {
     variant: "hero" as const,
     showHourly: true,
@@ -361,8 +399,12 @@ async function buildWeatherWidget(prompt: MorningViewPrompt): Promise<WeatherWid
 
   const data = await response.json();
   const current = data.current_condition?.[0];
-  const today = data.weather?.[0];
-  const hourly = today?.hourly ?? [];
+  const forecastDays = Array.isArray(data.weather) ? data.weather : [];
+  const dayOffset = Math.round(
+    (toNoonDate(context.requestedDate).getTime() - toNoonDate(context.todayDate).getTime()) / 86_400_000
+  );
+  const forecast = dayOffset < 0 ? null : forecastDays[dayOffset] ?? null;
+  const hourly = forecast?.hourly ?? [];
 
   // wttr.in always returns Fahrenheit values in numeric fields
   // Normalize to configured unit at build time — renderer is unit-agnostic
@@ -373,12 +415,17 @@ async function buildWeatherWidget(prompt: MorningViewPrompt): Promise<WeatherWid
     type: "weather",
     title: prompt.title,
     subtitle: weatherLocation,
-    state: current && today ? "ready" : "empty",
+    state: current && forecast ? "ready" : "empty",
+    summary: context.isPast
+      ? `Weather history is not backfilled for ${context.requestedDate}.`
+      : !forecast
+        ? `Forecast unavailable for ${context.requestedDate}.`
+        : undefined,
     data: {
       currentTemp: norm(Number(current?.temp_F ?? 0)),
       condition: current?.weatherDesc?.[0]?.value ?? "Unknown",
-      high: norm(Number(today?.maxtempF ?? 0)),
-      low: norm(Number(today?.mintempF ?? 0)),
+      high: norm(Number(forecast?.maxtempF ?? 0)),
+      low: norm(Number(forecast?.mintempF ?? 0)),
       rainChance: Number(hourly[4]?.chanceofrain ?? hourly[0]?.chanceofrain ?? 0),
       hourly: uiCfg.showHourly
         ? hourly.slice(0, hourlyCount).map((entry: any) => ({
@@ -480,6 +527,77 @@ async function buildJiraWidget(prompt: MorningViewPrompt): Promise<JiraWidget> {
   };
 }
 
+function dedupeSlackItems(items: SlackContextItem[]): SlackContextItem[] {
+  return Array.from(new Map(items.map((item) => [`${item.channelId}:${item.threadTs}`, item])).values());
+}
+
+async function buildSlackContextWidget(prompt: MorningViewPrompt): Promise<SlackContextWidget> {
+  const uiCfg = parseUiConfig(prompt.ui_config, {
+    variant: "grouped" as const,
+    maxPriority: 4,
+    maxThreads: 4,
+    maxUpdates: 4,
+    showParticipants: true,
+    showRefreshButton: true,
+  });
+
+  try {
+    const { fetchSlackContext } = await import("@/lib/slack-context");
+    const context = await withTimeout(fetchSlackContext(), 8000, "Slack context fetch");
+
+    const priority = context.items.filter((item) => item.reason === "mention" || item.reason === "name");
+    const threads = context.items.filter((item) => item.reason === "thread");
+    const updates = context.items.filter((item) => item.reason === "channel");
+    const shouldUseFallback = priority.length === 0 && threads.length === 0 && updates.length === 0;
+    const fallbackUpdates = shouldUseFallback ? context.fallbackItems : [];
+
+    return {
+      id: prompt.id,
+      type: "slack_context",
+      title: prompt.title,
+      subtitle: `${context.channelsScanned} channels scanned`,
+      state: context.items.length > 0 ? "ready" : "empty",
+      data: {
+        counts: {
+          mentions: context.items.filter((item) => item.reason === "mention").length,
+          threads: threads.length,
+          names: context.items.filter((item) => item.reason === "name").length,
+          channels: shouldUseFallback ? fallbackUpdates.length : updates.length,
+        },
+        priority: dedupeSlackItems(priority).slice(0, uiCfg.maxPriority ?? 4),
+        threads: dedupeSlackItems(threads).slice(0, uiCfg.maxThreads ?? 4),
+        updates: dedupeSlackItems(shouldUseFallback ? fallbackUpdates : updates).slice(0, uiCfg.maxUpdates ?? 4),
+        generatedAt: context.generatedAt,
+        channelsScanned: context.channelsScanned,
+      },
+      uiConfig: uiCfg,
+      actions: uiCfg.showRefreshButton
+        ? [{ id: "refresh-slack-context", label: "Refresh", kind: "api", href: "/api/context/slack" }]
+        : undefined,
+    };
+  } catch (error) {
+    return {
+      id: prompt.id,
+      type: "slack_context",
+      title: prompt.title,
+      state: "error",
+      error: error instanceof Error ? error.message : "Slack context unavailable",
+      data: {
+        counts: {
+          mentions: 0,
+          threads: 0,
+          names: 0,
+          channels: 0,
+        },
+        priority: [],
+        threads: [],
+        updates: [],
+      },
+      uiConfig: uiCfg,
+    };
+  }
+}
+
 async function buildDoNextWidget(prompt: MorningViewPrompt): Promise<DoNextWidget> {
   const uiCfg = parseUiConfig(prompt.ui_config, {
     variant: "focused" as const,
@@ -543,26 +661,64 @@ async function buildDoNextWidget(prompt: MorningViewPrompt): Promise<DoNextWidge
   };
 }
 
-async function buildWidget(prompt: MorningViewPrompt): Promise<TodayFocusWidget | undefined> {
+async function buildHealthCutWidget(prompt: MorningViewPrompt, context: SummaryContext): Promise<HealthCutWidget> {
+  const uiCfg = parseUiConfig(prompt.ui_config, { maxItems: 6, showCategory: true });
+  const data = getHealthCutData(context.requestedDate);
+
+  return {
+    id: prompt.id,
+    type: "health_cut",
+    title: prompt.title,
+    subtitle: data.mode === "cut" ? "Weekday cut" : "Weekend balance",
+    summary:
+      data.counts.total > 0
+        ? data.mode === "cut"
+          ? `${data.counts.done}/${data.counts.total} checkpoints locked in for ${context.requestedDate}.`
+          : `${data.counts.done}/${data.counts.total} weekend guardrails handled for ${context.requestedDate}.`
+        : `No health checkpoints seeded for ${context.requestedDate} yet.`,
+    state: data.counts.total > 0 ? "ready" : "empty",
+    data: {
+      mode: data.mode,
+      counts: data.counts,
+      checkpoints: data.checkpoints.slice(0, uiCfg.maxItems ?? 6),
+      mealLog: data.mealLog,
+    },
+    uiConfig: uiCfg,
+  };
+}
+
+async function buildWidget(prompt: MorningViewPrompt, context: SummaryContext): Promise<TodayFocusWidget | undefined> {
   switch (prompt.source_type) {
     case "journal_unresolved":
       return await buildJournalUnresolvedWidget(prompt);
     case "calendar_today":
-      return await buildCalendarTodayWidget(prompt);
+      return await buildCalendarTodayWidget(prompt, context);
     case "weather":
-      return await buildWeatherWidget(prompt);
+      return await buildWeatherWidget(prompt, context);
     case "jira_assigned":
       return await buildJiraWidget(prompt);
     case "journal_do_next":
       return await buildDoNextWidget(prompt);
+    case "health_cut":
+      return await buildHealthCutWidget(prompt, context);
+    case "slack_context":
+      return await buildSlackContextWidget(prompt);
     default:
       return undefined;
   }
 }
 
+function shouldSkipLlmSummary(prompt: MorningViewPrompt): boolean {
+  return prompt.source_type === "slack_context";
+}
+
 async function summarizeWidget(widget: TodayFocusWidget, prompt: MorningViewPrompt, sourceData: string): Promise<string | undefined> {
   if (!sourceData && prompt.source_type === "static") {
     return prompt.prompt_text;
+  }
+
+  if (shouldSkipLlmSummary(prompt)) {
+    return sourceData;
   }
 
   if (sourceData && (!process.env.OLLAMA_URL && !process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY)) {
@@ -598,7 +754,7 @@ async function summarizeWidget(widget: TodayFocusWidget, prompt: MorningViewProm
   }
 }
 
-async function executePrompt(prompt: MorningViewPrompt): Promise<{ content: string; widget?: TodayFocusWidget }> {
+async function executePrompt(prompt: MorningViewPrompt, context: SummaryContext): Promise<{ content: string; widget?: TodayFocusWidget }> {
   const db = getDb();
   const { source_type, source_config, prompt_text } = prompt;
 
@@ -606,7 +762,7 @@ async function executePrompt(prompt: MorningViewPrompt): Promise<{ content: stri
   let widget: TodayFocusWidget | undefined;
 
   try {
-    widget = await buildWidget(prompt);
+    widget = await buildWidget(prompt, context);
 
     switch (source_type) {
       case "journal_unresolved": {
@@ -636,40 +792,39 @@ async function executePrompt(prompt: MorningViewPrompt): Promise<{ content: stri
       }
 
       case "calendar_today": {
-        const { getTodayEvents } = await import("@/lib/calendar");
-        const events = await getTodayEvents();
+        const { getEventsForDate } = await import("@/lib/calendar");
+        const events = await getEventsForDate(context.requestedDate);
         if (events.length > 0) {
-          sourceData = `Today's calendar (${events.length} events):\n${events.map(e => {
+          sourceData = `Calendar for ${context.requestedDate} (${events.length} events):\n${events.map(e => {
             const time = e.allDay ? "All day" : new Date(e.startDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
             return `- ${time}: ${e.summary}${e.location ? ` @ ${e.location}` : ""}`;
           }).join("\n")}`;
         } else {
-          sourceData = "No calendar events today. Free day! 📅";
+          sourceData = `No calendar events for ${context.requestedDate}.`;
         }
         break;
       }
 
       case "meeting_prep_today": {
         try {
-          const today = new Date().toISOString().split("T")[0];
           const meetings = db.prepare(`
             SELECT title, time, prep_status, prep_notes
             FROM meeting_prep
             WHERE occurrence_date = ?
             ORDER BY time ASC
-          `).all(today) as Array<{ title: string; time: string; prep_status: string; prep_notes: string | null }>;
+          `).all(context.requestedDate) as Array<{ title: string; time: string; prep_status: string; prep_notes: string | null }>;
 
           if (meetings.length > 0) {
             const needsPrep = meetings.filter(m => m.prep_status === "none" || m.prep_status === "partial");
             if (needsPrep.length > 0) {
-              sourceData = `Meetings needing prep (${needsPrep.length}):\n${needsPrep.map(m =>
+              sourceData = `Meetings needing prep on ${context.requestedDate} (${needsPrep.length}):\n${needsPrep.map(m =>
                 `- ${m.time ? new Date(`2000-01-01T${m.time}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "TBD"}: ${m.title}`
               ).join("\n")}`;
             } else {
-              sourceData = `All ${meetings.length} meetings today are prepped! ✅`;
+              sourceData = `All ${meetings.length} meetings on ${context.requestedDate} are prepped.`;
             }
           } else {
-            sourceData = "No meetings scheduled for today.";
+            sourceData = `No meetings scheduled for ${context.requestedDate}.`;
           }
         } catch (error) {
           console.error("Meeting prep error:", error);
@@ -682,7 +837,9 @@ async function executePrompt(prompt: MorningViewPrompt): Promise<{ content: stri
         if (widget?.type === "weather") {
           const unit = widget.uiConfig?.unit ?? "C";
           const sym = `°${unit}`;
-          sourceData = `Weather:\n- Current: ${widget.data.currentTemp}${sym}, ${widget.data.condition}\n- High/Low: ${widget.data.high}${sym} / ${widget.data.low}${sym}\n- Rain chance: ${widget.data.rainChance ?? 0}%`;
+          sourceData = widget.summary
+            ? widget.summary
+            : `Weather for ${context.requestedDate}:\n- Current: ${widget.data.currentTemp}${sym}, ${widget.data.condition}\n- High/Low: ${widget.data.high}${sym} / ${widget.data.low}${sym}\n- Rain chance: ${widget.data.rainChance ?? 0}%`;
         } else {
           sourceData = "Weather unavailable.";
         }
@@ -702,6 +859,78 @@ async function executePrompt(prompt: MorningViewPrompt): Promise<{ content: stri
         } catch (error) {
           console.error("Jira error:", error);
           sourceData = "Jira unavailable.";
+        }
+        break;
+      }
+
+      case "health_cut": {
+        if (widget?.type === "health_cut") {
+          const label = widget.data.mode === "cut" ? "Weekday cut" : "Weekend balance";
+          sourceData = `${label} for ${context.requestedDate}:\n- Done: ${widget.data.counts.done}/${widget.data.counts.total}\n- Remaining: ${widget.data.counts.remaining}\n- Blocked: ${widget.data.counts.blocked}\n${widget.data.checkpoints.map((item) => `- [${item.status}] ${item.text}`).join("\n")}`;
+        } else {
+          sourceData = "Health checkpoints unavailable.";
+        }
+        break;
+      }
+
+      case "journal_do_next": {
+        if (widget?.type === "journal_do_next") {
+          const inProgress = widget.data.inProgress
+            .map((item) => `- ${item.text}${item.lane ? ` (${item.lane})` : ""}`)
+            .join("\n");
+          const topOpen = widget.data.topOpen
+            .map((item) => `- ${item.text}${item.lane ? ` (${item.lane})` : ""}`)
+            .join("\n");
+
+          const parts = [
+            `Active work (${widget.data.counts.inProgress}):`,
+            inProgress || "- No in-progress work surfaced.",
+          ];
+
+          if (widget.data.topOpen.length > 0) {
+            parts.push(`\nNext open tasks (${widget.data.counts.open}):`);
+            parts.push(topOpen);
+          } else if (widget.data.counts.open > 0) {
+            parts.push(`\nOpen tasks waiting in the queue: ${widget.data.counts.open}`);
+          }
+
+          sourceData = parts.join("\n");
+        } else {
+          sourceData = "Do-next context unavailable.";
+        }
+        break;
+      }
+
+      case "slack_context": {
+        if (widget?.type === "slack_context") {
+          const lines: string[] = [];
+          if (widget.data.priority.length > 0) {
+            lines.push(
+              `Needs your attention:\n${widget.data.priority
+                .map((item) => `- #${item.channelName}: ${item.summary}`)
+                .join("\n")}`,
+            );
+          }
+          if (widget.data.threads.length > 0) {
+            lines.push(
+              `Threads you're in:\n${widget.data.threads
+                .map((item) => `- #${item.channelName}: ${item.summary}`)
+                .join("\n")}`,
+            );
+          }
+          if (widget.data.updates.length > 0) {
+            const updateLabel = widget.data.priority.length === 0 && widget.data.threads.length === 0
+              ? "General Slack updates"
+              : "Relevant channel updates";
+            lines.push(
+              `${updateLabel}:\n${widget.data.updates
+                .map((item) => `- #${item.channelName}: ${item.summary}`)
+                .join("\n")}`,
+            );
+          }
+          sourceData = lines.join("\n\n") || "No priority Slack context right now.";
+        } else {
+          sourceData = "Slack context unavailable.";
         }
         break;
       }
@@ -736,6 +965,15 @@ async function executePrompt(prompt: MorningViewPrompt): Promise<{ content: stri
   };
 }
 
+function toResponseResult(prompt: MorningViewPrompt, result: { content: string; widget?: TodayFocusWidget; error?: string }) {
+  return {
+    prompt,
+    content: result.content,
+    error: result.error,
+    widget: result.widget,
+  };
+}
+
 export async function GET(req: NextRequest) {
   const limited = rateLimitMiddleware(req, {
     windowMs: 60000,
@@ -747,8 +985,9 @@ export async function GET(req: NextRequest) {
     const db = getDb();
     const { searchParams } = new URL(req.url);
     const force = searchParams.get("force") === "true";
-    const today = new Date().toISOString().split("T")[0];
-    const cacheKey = makeCacheKey(today);
+    const promptId = searchParams.get("promptId");
+    const context = getSummaryContext(searchParams.get("date"));
+    const cacheKey = makeCacheKey(context.requestedDate);
 
     // Return cached result for non-force requests within TTL
     if (!force) {
@@ -770,9 +1009,43 @@ export async function GET(req: NextRequest) {
       ORDER BY sort_order ASC
     `).all() as MorningViewPrompt[];
 
+    if (promptId) {
+      const prompt = allPrompts.find((entry) => entry.id === promptId);
+      if (!prompt) {
+        return NextResponse.json({ error: "Prompt not found" }, { status: 404 });
+      }
+
+      try {
+        const timeoutMs = prompt.source_type === "calendar_today" ? 20000 : prompt.source_type === "slack_context" ? 20000 : 12000;
+        const result = await withTimeout(
+          executePrompt(prompt, context),
+          timeoutMs,
+          `Prompt ${prompt.id}`,
+        );
+        return NextResponse.json({
+          promptId,
+          result: toResponseResult(prompt, result),
+          cachedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error(`Error executing prompt ${promptId}:`, error);
+        return NextResponse.json(
+          {
+            promptId,
+            result: toResponseResult(prompt, {
+              content: "",
+              error: String(error),
+            }),
+            cachedAt: new Date().toISOString(),
+          },
+          { status: 500 },
+        );
+      }
+    }
+
     const promptsToRun = force
       ? allPrompts
-      : allPrompts.filter(shouldRunToday);
+      : allPrompts.filter((prompt) => shouldRunForDate(prompt, context));
 
     const results: PromptResult[] = [];
 
@@ -780,15 +1053,11 @@ export async function GET(req: NextRequest) {
       try {
         const timeoutMs = prompt.source_type === "calendar_today" ? 20000 : 12000;
         const result = await withTimeout(
-          executePrompt(prompt),
+          executePrompt(prompt, context),
           timeoutMs,
           `Prompt ${prompt.id}`
         );
-        results.push({
-          prompt,
-          content: result.content,
-          widget: result.widget,
-        });
+        results.push(toResponseResult(prompt, result));
 
         db.prepare(`
           UPDATE morning_view_prompts 
@@ -809,10 +1078,13 @@ export async function GET(req: NextRequest) {
       results,
       totalPrompts: allPrompts.length,
       ranPrompts: promptsToRun.length,
+      requestedDate: context.requestedDate,
+      todayDate: context.todayDate,
+      dateMode: context.isToday ? "today" : context.isPast ? "past" : "future",
     };
 
     // Cache fresh results (always store, even after force=true refresh)
-    setCache(cacheKey, responseData, today);
+    setCache(cacheKey, responseData, context.requestedDate);
     const status = getCacheStatus(cacheKey);
 
     return NextResponse.json({
@@ -839,8 +1111,8 @@ export async function GET(req: NextRequest) {
 
 async function refreshTodaySummary(): Promise<void> {
   const db = getDb();
-  const today = new Date().toISOString().split("T")[0];
-  const cacheKey = makeCacheKey(today);
+  const context = getSummaryContext();
+  const cacheKey = makeCacheKey(context.requestedDate);
 
   // Snapshot previously-cached results before we start. On a per-prompt
   // failure we fall back to the stale-but-good cached entry so the widget
@@ -856,14 +1128,14 @@ async function refreshTodaySummary(): Promise<void> {
     ORDER BY sort_order ASC
   `).all() as MorningViewPrompt[];
 
-  const promptsToRun = allPrompts.filter(shouldRunToday);
+  const promptsToRun = allPrompts.filter((prompt) => shouldRunForDate(prompt, context));
   const results: PromptResult[] = [];
 
   for (const prompt of promptsToRun) {
     try {
       const timeoutMs = prompt.source_type === "calendar_today" ? 20000 : 12000;
       const result = await withTimeout(
-        executePrompt(prompt),
+        executePrompt(prompt, context),
         timeoutMs,
         `Background refresh: prompt ${prompt.id}`
       );
@@ -890,8 +1162,11 @@ async function refreshTodaySummary(): Promise<void> {
       results,
       totalPrompts: allPrompts.length,
       ranPrompts: promptsToRun.length,
+      requestedDate: context.requestedDate,
+      todayDate: context.todayDate,
+      dateMode: "today",
     };
-    setCache(cacheKey, responseData, today);
+    setCache(cacheKey, responseData, context.requestedDate);
   }
 }
 

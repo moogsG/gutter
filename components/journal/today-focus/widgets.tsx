@@ -1,10 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import {
+  useRefreshTodayFocusWidgetMutation,
+  useSubmitHealthCutMealLogMutation,
+} from "@/store/api/journalApi";
 import {
   Calendar,
+  Check,
   Cloud,
+  HeartPulse,
   ListChecks,
   MapPin,
   AlertCircle,
@@ -23,6 +33,7 @@ import type {
   CalendarWidgetEvent,
   DoNextItem,
   DoNextWidget,
+  HealthCutWidget,
   JiraWidget,
   JiraWidgetItem,
   TodayFocusWidget,
@@ -41,9 +52,28 @@ function formatTime(dateString: string, allDay?: boolean) {
   });
 }
 
-function getTaskStatusIcon(status: UnresolvedTaskItem["status"], size: "sm" | "xs" = "sm") {
+function formatDateTime(dateString: string) {
+  return new Date(dateString).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatLocalIsoDate(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function getTaskStatusIcon(status: UnresolvedTaskItem["status"] | "done", size: "sm" | "xs" = "sm") {
   const cls = size === "xs" ? "w-3 h-3" : "w-3.5 h-3.5";
   switch (status) {
+    case "done":
+      return <Check className={cn(cls, "text-emerald-400")} />;
     case "blocked":
       return <AlertCircle className={cn(cls, "text-destructive")} />;
     case "in-progress":
@@ -823,6 +853,176 @@ export function DoNextWidgetCard({ widget }: { widget: DoNextWidget }) {
   );
 }
 
+const HEALTH_CATEGORY_LABELS: Record<string, string> = {
+  omad: "OMAD",
+  workout: "Workout",
+  alcohol: "Alcohol",
+  prep: "Prep",
+  nutrition: "Nutrition",
+  other: "Health",
+};
+
+function getHealthStatusTone(status: "open" | "in-progress" | "blocked" | "done") {
+  switch (status) {
+    case "done":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-100";
+    case "blocked":
+      return "border-destructive/30 bg-destructive/10 text-rose-100";
+    case "in-progress":
+      return "border-primary/30 bg-primary/10 text-blue-100";
+    default:
+      return "border-border/60 bg-muted/40 text-foreground";
+  }
+}
+
+export function HealthCutWidgetCard({ widget }: { widget: HealthCutWidget }) {
+  const [draft, setDraft] = useState("");
+  const [liveWidget, setLiveWidget] = useState(widget);
+  const [submitMealLog, { isLoading: isSubmitting }] = useSubmitHealthCutMealLogMutation();
+  const [refreshWidget] = useRefreshTodayFocusWidgetMutation();
+
+  const currentWidget = liveWidget;
+  const maxItems = widget.uiConfig?.maxItems ?? 6;
+  const showCategory = currentWidget.uiConfig?.showCategory !== false;
+  const items = currentWidget.data.checkpoints.slice(0, maxItems);
+  const mealLog = currentWidget.data.mealLog;
+
+  const handleSubmitMealLog = async () => {
+    const text = draft.trim();
+    if (!text) {
+      toast.error("Write what you ate first");
+      return;
+    }
+
+    try {
+      await submitMealLog({
+        date: formatLocalIsoDate(),
+        text,
+        promptId: currentWidget.id,
+      }).unwrap();
+
+      const refreshed = await refreshWidget(currentWidget.id).unwrap();
+      if (refreshed.result.widget?.type === "health_cut") {
+        setLiveWidget(refreshed.result.widget);
+      }
+
+      setDraft("");
+      toast.success("Meal log saved");
+    } catch (error) {
+      console.error("Failed to submit meal log", error);
+      toast.error("Failed to save meal log");
+    }
+  };
+
+  return (
+    <Card className="bg-card/60 backdrop-blur-xl border-border transition-all">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+          <HeartPulse className="w-3.5 h-3.5 text-primary" />
+          {currentWidget.title}
+          <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 font-normal normal-case tracking-normal">
+            {currentWidget.data.counts.done}/{currentWidget.data.counts.total}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {currentWidget.summary && <p className="text-sm text-foreground/80 leading-relaxed">{currentWidget.summary}</p>}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-lg border border-border/50 bg-primary/5 px-2 py-2 text-center">
+            <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Done</div>
+            <div className="text-sm font-semibold text-foreground tabular-nums">{currentWidget.data.counts.done}</div>
+          </div>
+          <div className="rounded-lg border border-border/50 bg-primary/5 px-2 py-2 text-center">
+            <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Left</div>
+            <div className="text-sm font-semibold text-foreground tabular-nums">{currentWidget.data.counts.remaining}</div>
+          </div>
+          <div className="rounded-lg border border-border/50 bg-primary/5 px-2 py-2 text-center">
+            <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Blocked</div>
+            <div className="text-sm font-semibold text-foreground tabular-nums">{currentWidget.data.counts.blocked}</div>
+          </div>
+        </div>
+        <div
+          className={cn(
+            "rounded-xl border px-3 py-3",
+            mealLog.completed ? "border-emerald-500/30 bg-emerald-500/10" : "border-primary/30 bg-primary/10"
+          )}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+                Food Gate
+              </div>
+              <p className="mt-1 text-sm text-foreground/90">{mealLog.prompt}</p>
+            </div>
+            <Badge variant={mealLog.completed ? "secondary" : "outline"} className="shrink-0 text-[10px] px-1.5 py-0">
+              {mealLog.completed ? "logged" : "open"}
+            </Badge>
+          </div>
+
+          {mealLog.latestEntry ? (
+            <div className="mt-3 rounded-lg border border-border/50 bg-background/40 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Latest Entry
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  {formatDateTime(mealLog.latestEntry.createdAt)}
+                </div>
+              </div>
+              <p className="mt-1 text-sm leading-relaxed text-foreground">{mealLog.latestEntry.text}</p>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                {mealLog.entriesCount} update{mealLog.entriesCount === 1 ? "" : "s"} today
+              </p>
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Nothing logged yet. Brutal honesty beats fake tracking.
+            </p>
+          )}
+
+          <div className="mt-3 space-y-2">
+            <Textarea
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder="What you ate, rough portions, sauces, drinks, and any snack nonsense..."
+              className="min-h-[96px] resize-none bg-background/70"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] text-muted-foreground">
+                Keep it simple: food, portions, sauces, drinks.
+              </p>
+              <Button size="sm" onClick={handleSubmitMealLog} disabled={isSubmitting}>
+                {isSubmitting ? "Saving..." : mealLog.completed ? "Add Update" : "Submit Food Log"}
+              </Button>
+            </div>
+          </div>
+        </div>
+        {items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No health cut checkpoints seeded for today.</p>
+        ) : (
+          <div className="space-y-2">
+            {items.map((item) => (
+              <div key={item.id} className={cn("rounded-lg border px-3 py-2", getHealthStatusTone(item.status))}>
+                <div className="flex items-start gap-2">
+                  {getTaskStatusIcon(item.status, "xs")}
+                  <div className="min-w-0 flex-1">
+                    {showCategory && (
+                      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+                        {HEALTH_CATEGORY_LABELS[item.category] ?? "Health"}
+                      </div>
+                    )}
+                    <div className="text-sm leading-tight">{item.text}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Dispatch ────────────────────────────────────────────────────────────────
 
 export function renderTodayFocusWidget(widget: TodayFocusWidget) {
@@ -837,6 +1037,8 @@ export function renderTodayFocusWidget(widget: TodayFocusWidget) {
       return <JiraWidgetCard widget={widget} />;
     case "journal_do_next":
       return <DoNextWidgetCard widget={widget} />;
+    case "health_cut":
+      return <HealthCutWidgetCard widget={widget} />;
     default:
       return null;
   }

@@ -24,6 +24,94 @@ interface TableStats {
 	migrated: number;
 }
 
+interface LegacyTaskRow {
+	id: string;
+	text: string;
+	project: string;
+	priority: string;
+	status: string;
+	owner: string;
+	due_date?: string | null;
+	blocked_by?: string | null;
+	jira_key?: string | null;
+	created_at: string;
+	completed_at?: string | null;
+	tags?: string | null;
+	parent_id?: string | null;
+}
+
+function mapLegacyTaskStatus(status: string): string {
+	switch (status) {
+		case "done":
+		case "complete":
+		case "completed":
+			return "done";
+		case "review":
+		case "testing":
+		case "in-progress":
+			return "in-progress";
+		case "blocked":
+			return "blocked";
+		default:
+			return "open";
+	}
+}
+
+function mapLegacyTaskLane(project: string): string | null {
+	switch (project.trim().toLowerCase()) {
+		case "gradient":
+			return "work";
+		case "jw":
+			return "jw";
+		case "petalz":
+			return "petalz";
+		case "home":
+			return "family";
+		case "personal":
+		case "inbox":
+		case "ideas":
+		case "general":
+		case "infra":
+		case "mission control":
+			return "personal";
+		default:
+			return null;
+	}
+}
+
+function mapLegacyTaskPriority(priority: string): string {
+	switch (priority.trim().toLowerCase()) {
+		case "high":
+			return "high";
+		case "low":
+			return "low";
+		default:
+			return "normal";
+	}
+}
+
+function toDateOnly(value?: string | null): string {
+	if (!value) return new Date().toISOString().slice(0, 10);
+	const match = value.match(/^\d{4}-\d{2}-\d{2}/);
+	if (match) return match[0];
+
+	const parsed = new Date(value);
+	if (Number.isNaN(parsed.getTime())) {
+		return new Date().toISOString().slice(0, 10);
+	}
+	return parsed.toISOString().slice(0, 10);
+}
+
+function parseLegacyTags(raw?: string | null): string[] {
+	if (!raw) return [];
+	try {
+		const parsed = JSON.parse(raw);
+		return Array.isArray(parsed) ? parsed.filter((tag) => typeof tag === "string") : [];
+	} catch {
+		return [];
+	}
+}
+
 function backup(dbPath: string) {
 	if (!existsSync(dbPath)) return null;
 
@@ -183,6 +271,91 @@ function migrate() {
 			legacy_count: legacyEntries,
 			primary_count: primaryEntriesAfter,
 			migrated: entriesMigrated,
+		});
+
+		// 2b. Migrate legacy tasks into journal_entries
+		console.log("✅ Recovering legacy tasks...");
+		const legacyTasks = getTableCount(legacyDb, "tasks");
+		const primaryTasksBefore = primaryDb
+			.prepare("SELECT COUNT(*) as count FROM journal_entries WHERE signifier = 'task'")
+			.get() as { count: number };
+
+		if (!DRY_RUN && legacyTasks > 0) {
+			const tasks = legacyDb
+				.prepare(
+					`SELECT id, text, project, priority, status, owner, due_date, blocked_by, jira_key,
+					        created_at, completed_at, tags, parent_id
+					 FROM tasks
+					 ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, created_at ASC, id ASC`,
+				)
+				.all() as LegacyTaskRow[];
+
+			const sortOrderByDate = new Map<string, number>();
+			const existingMaxOrders = primaryDb
+				.prepare(
+					`SELECT date, MAX(sort_order) as max_sort_order
+					 FROM journal_entries
+					 GROUP BY date`,
+				)
+				.all() as Array<{ date: string; max_sort_order: number | null }>;
+
+			for (const row of existingMaxOrders) {
+				sortOrderByDate.set(row.date, row.max_sort_order ?? -1);
+			}
+
+			for (const task of tasks) {
+				const date = toDateOnly(task.due_date || task.created_at);
+				const sortOrder = (sortOrderByDate.get(date) ?? -1) + 1;
+				sortOrderByDate.set(date, sortOrder);
+
+				const tags = Array.from(
+					new Set([
+						...parseLegacyTags(task.tags),
+						"legacy-task",
+						`legacy-project:${task.project}`,
+						task.jira_key ? `jira:${task.jira_key}` : null,
+					].filter((tag): tag is string => Boolean(tag))),
+				);
+				const createdAt = task.created_at || new Date().toISOString();
+				const updatedAt = task.completed_at || task.created_at || new Date().toISOString();
+
+				primaryDb
+					.prepare(
+						`INSERT OR IGNORE INTO journal_entries
+						 (id, date, signifier, text, status, lane, priority, waiting_on, collection_id,
+						  parent_id, tags, sort_order, created_at, updated_at)
+						 VALUES (?, ?, 'task', ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
+					)
+					.run(
+						task.id,
+						date,
+						task.text,
+						mapLegacyTaskStatus(task.status),
+						mapLegacyTaskLane(task.project),
+						mapLegacyTaskPriority(task.priority),
+						task.blocked_by?.trim() || null,
+						task.parent_id || null,
+						JSON.stringify(tags),
+						sortOrder,
+						createdAt,
+						updatedAt,
+					);
+			}
+		}
+
+		const primaryTasksAfter = primaryDb
+			.prepare("SELECT COUNT(*) as count FROM journal_entries WHERE signifier = 'task'")
+			.get() as { count: number };
+		const tasksMigrated = primaryTasksAfter.count - primaryTasksBefore.count;
+
+		console.log(
+			`   ✅ ${tasksMigrated} legacy tasks recovered (${legacyTasks} in legacy, ${primaryTasksAfter.count} total task entries in primary)`,
+		);
+		stats.push({
+			table: "legacy_tasks",
+			legacy_count: legacyTasks,
+			primary_count: primaryTasksAfter.count,
+			migrated: tasksMigrated,
 		});
 
 		// 3. Migrate future_log
