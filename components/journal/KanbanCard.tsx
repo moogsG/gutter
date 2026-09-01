@@ -24,7 +24,7 @@ import {
 interface KanbanCardProps {
   task: Task;
   isDragging?: boolean;
-  onOpen?: (task: Task) => void;
+  onOpen?: (task: Task, opener: HTMLButtonElement) => void;
   onMove?: (task: Task, status: string) => void;
   isMoving?: boolean;
 }
@@ -102,7 +102,7 @@ export function KanbanCard({ task, isDragging, onOpen, onMove, isMoving }: Kanba
       <button
         type="button"
         className="flex w-full items-start gap-2 pr-5 text-left rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        onClick={() => onOpen?.(task)}
+        onClick={(event) => onOpen?.(task, event.currentTarget)}
         aria-label={`Open task: ${task.text}`}
       >
         <StatusIcon status={task.status} />

@@ -14,7 +14,7 @@ interface KanbanColumnProps {
   isOver?: boolean;
   accentClass: string;
   countClass: string;
-  onOpenTask: (task: Task) => void;
+  onOpenTask: (task: Task, opener: HTMLButtonElement) => void;
   onMoveTask: (task: Task, status: string) => void;
   movingTaskId?: string | null;
 }

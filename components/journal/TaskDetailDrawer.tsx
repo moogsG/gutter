@@ -11,6 +11,7 @@ import {
   useGetTaskCommentsQuery,
   useGetTaskQuery,
 } from "@/store/api/tasksApi";
+import type { RefObject } from "react";
 import type { Task } from "@/types";
 
 function parseTags(tags: string | string[] | null | undefined): string[] {
@@ -67,7 +68,13 @@ function Metadata({ task }: { task: Task }) {
   );
 }
 
-export function TaskDetailDrawer({ selectedTask, onClose }: { selectedTask: Task | null; onClose: () => void }) {
+interface TaskDetailDrawerProps {
+  selectedTask: Task | null;
+  onClose: () => void;
+  returnFocusRef: RefObject<HTMLElement | null>;
+}
+
+export function TaskDetailDrawer({ selectedTask, onClose, returnFocusRef }: TaskDetailDrawerProps) {
   const taskId = selectedTask?.id ?? "";
   const detail = useGetTaskQuery(taskId, { skip: !taskId });
   const comments = useGetTaskCommentsQuery(taskId, { skip: !taskId });
@@ -81,7 +88,13 @@ export function TaskDetailDrawer({ selectedTask, onClose }: { selectedTask: Task
 
   return (
     <Sheet open={Boolean(selectedTask)} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <SheetContent className="w-full gap-0 p-0 sm:max-w-xl">
+      <SheetContent
+        className="w-full gap-0 p-0 sm:max-w-xl"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocusRef.current?.focus();
+        }}
+      >
         <SheetHeader className="border-b border-border pr-12">
           <div className="flex items-center gap-2">
             <Badge variant="outline">{task ? statusLabel(task.status) : "Task"}</Badge>

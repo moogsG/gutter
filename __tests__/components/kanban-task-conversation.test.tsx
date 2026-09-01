@@ -1,9 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useRef, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { KanbanCard } from "@/components/journal/KanbanCard";
 import { TaskCommentComposer } from "@/components/journal/TaskCommentComposer";
 import { TaskCommentTimeline } from "@/components/journal/TaskCommentTimeline";
+import { TaskDetailDrawer } from "@/components/journal/TaskDetailDrawer";
 import type { Task, TaskComment } from "@/types";
 
 vi.mock("@dnd-kit/sortable", () => ({
@@ -11,6 +13,12 @@ vi.mock("@dnd-kit/sortable", () => ({
     attributes: {}, listeners: {}, setNodeRef: vi.fn(), transform: null,
     transition: undefined, isDragging: false,
   }),
+}));
+
+vi.mock("@/store/api/tasksApi", () => ({
+  useGetTaskQuery: () => ({ data: undefined, isLoading: false, isError: false }),
+  useGetTaskCommentsQuery: () => ({ data: [], isLoading: false, isError: false }),
+  useAddTaskCommentMutation: () => [vi.fn(), { isLoading: false }],
 }));
 
 const task: Task = {
@@ -31,6 +39,28 @@ const comments: TaskComment[] = [
   },
 ];
 
+function FocusRestorationHarness() {
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+
+  return (
+    <>
+      <KanbanCard
+        task={task}
+        onOpen={(openedTask, opener) => {
+          openerRef.current = opener;
+          setSelectedTask(openedTask);
+        }}
+      />
+      <TaskDetailDrawer
+        selectedTask={selectedTask}
+        onClose={() => setSelectedTask(null)}
+        returnFocusRef={openerRef}
+      />
+    </>
+  );
+}
+
 beforeEach(() => {
   Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", { configurable: true, value: () => false });
   Object.defineProperty(HTMLElement.prototype, "setPointerCapture", { configurable: true, value: () => undefined });
@@ -47,8 +77,25 @@ describe("Kanban task conversation", () => {
     openButton.focus();
     await user.keyboard("{Enter}");
     expect(onOpen).toHaveBeenCalledTimes(2);
+    expect(onOpen).toHaveBeenLastCalledWith(task, openButton);
     expect(screen.getByLabelText("2 comments")).toBeInTheDocument();
     expect(screen.getByText(/Active Sep 1/)).toBeInTheDocument();
+  });
+
+  it("restores focus to the exact keyboard opener after every drawer close path", async () => {
+    const user = userEvent.setup();
+    render(<FocusRestorationHarness />);
+    const opener = screen.getByRole("button", { name: `Open task: ${task.text}` });
+
+    opener.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(opener).toHaveFocus());
+
+    await user.keyboard("{Enter}");
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 
   it("moves status from the card menu without dragging", async () => {

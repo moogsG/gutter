@@ -12,7 +12,7 @@ import {
 } from "@dnd-kit/core";
 import Link from "next/link";
 import { MessageSquarePlus, RefreshCw } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { KanbanCardOverlay } from "@/components/journal/KanbanCard";
 import { KanbanColumn } from "@/components/journal/KanbanColumn";
 import { JournalHeader } from "@/components/journal/JournalHeader";
@@ -54,6 +54,7 @@ export default function KanbanPage() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [movingTaskId, setMovingTaskId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const drawerOpenerRef = useRef<HTMLElement | null>(null);
   const boardQuery = useGetKanbanBoardTasksQuery({});
   const [moveTask] = useMoveTaskMutation();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -81,6 +82,11 @@ export default function KanbanPage() {
       setMovingTaskId(null);
     }
   }, [moveTask]);
+
+  const handleOpenTask = useCallback((task: Task, opener: HTMLButtonElement) => {
+    drawerOpenerRef.current = opener;
+    setSelectedTask(task);
+  }, []);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const source = findColumn(String(event.active.id), columnTasks);
@@ -122,12 +128,12 @@ export default function KanbanPage() {
       ) : (
         <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="flex-1 overflow-x-auto overflow-y-hidden"><div className="flex h-full min-w-max gap-4 p-6">
-            {COLUMNS.map((column) => <div key={column.id} className="flex w-[280px] xl:w-[300px]"><KanbanColumn {...column} tasks={columnTasks[column.id]} onOpenTask={setSelectedTask} onMoveTask={handleMove} movingTaskId={movingTaskId} /></div>)}
+            {COLUMNS.map((column) => <div key={column.id} className="flex w-[280px] xl:w-[300px]"><KanbanColumn {...column} tasks={columnTasks[column.id]} onOpenTask={handleOpenTask} onMoveTask={handleMove} movingTaskId={movingTaskId} /></div>)}
           </div></div>
           <DragOverlay>{activeTask ? <KanbanCardOverlay task={activeTask} /> : null}</DragOverlay>
         </DndContext>
       )}
-      <TaskDetailDrawer selectedTask={selectedTask} onClose={() => setSelectedTask(null)} />
+      <TaskDetailDrawer selectedTask={selectedTask} onClose={() => setSelectedTask(null)} returnFocusRef={drawerOpenerRef} />
     </div>
   );
 }
