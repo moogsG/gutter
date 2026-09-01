@@ -1,45 +1,16 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import { GET, POST } from "@/app/api/journal/route";
 import { getDb } from "@/lib/db";
 import { clearRateLimitState } from "@/lib/rate-limit";
-import { existsSync, unlinkSync } from "node:fs";
 
-const TEST_DB_PATH = "./test-journal-api.db";
-const TEST_DB_WAL = "./test-journal-api.db-wal";
-const TEST_DB_SHM = "./test-journal-api.db-shm";
-
-// Override DB path for tests
-const originalDbPath = process.env.DATABASE_PATH;
-process.env.DATABASE_PATH = TEST_DB_PATH;
-
-function cleanupTestDb() {
-	[TEST_DB_PATH, TEST_DB_WAL, TEST_DB_SHM].forEach((path) => {
-		if (existsSync(path)) {
-			try {
-				unlinkSync(path);
-			} catch (err) {
-				// Ignore cleanup errors
-			}
-		}
-	});
-}
 
 // Shared database instance for all tests
 let sharedDb: ReturnType<typeof getDb>;
 
 // Setup once before all tests
 beforeAll(() => {
-	cleanupTestDb();
 	sharedDb = getDb();
-});
-
-// Cleanup once after all tests
-afterAll(() => {
-	cleanupTestDb();
-	if (originalDbPath) {
-		process.env.DATABASE_PATH = originalDbPath;
-	}
 });
 
 describe("GET /api/journal", () => {

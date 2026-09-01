@@ -35,10 +35,10 @@ Gutter uses two separate SQLite databases with WAL (Write-Ahead Logging) for con
 
 #### `gutter-journal.db` — Journal Database (primary)
 - **Path:** `$JOURNAL_DB_PATH` (default: `./gutter-journal.db`)
-- **Connection:** `lib/journal-db.ts` → `getJournalDb()`
+- **Connection:** `lib/db.ts` → `getDb()`
 - **Tables:** Same as above, plus `projects` and `_meta` (schema versioning)
 - **Features:** 
-  - Schema migrations (current version: 2)
+  - Ordered, transactional schema migrations (current version: 7)
   - Automatic daily backups to `./backups/` (last 7 retained)
   - `_meta` table for version tracking
 
@@ -197,16 +197,12 @@ Response: [{ id, text, date, signifier, _distance }]
 
 ## Core Libraries
 
-### `lib/db.ts` — Main Database
-- Exports `getDb()` for synchronous access to `gutter.db`
-- WAL mode, foreign keys enabled
-- Returns `better-sqlite3` Database instance
-
-### `lib/journal-db.ts` — Journal Database (primary)
-- Exports `getJournalDb()` for synchronous access to `gutter-journal.db`
+### `lib/db.ts` — Primary Journal Database
+- Exports `getDb()` for synchronous access to `gutter-journal.db`
+- WAL mode and foreign keys enabled
 - Schema versioning via `_meta` table
 - Automatic daily backups via `triggerBackup()`
-- Migrations applied on startup
+- Ordered, transactional migrations applied on startup
 
 ### `lib/jira.ts` — Jira Integration
 - `fetchAssignedIssues(forceRefresh)` — fetches open Jira issues, caches for 5 minutes
@@ -250,16 +246,16 @@ Single-user password auth via HTTP-only cookie.
 **Flow:**
 1. User enters password → `POST /api/auth`
 2. Compare password hash with `AUTH_PASSWORD_HASH` env var (bcrypt)
-3. Generate secure session token → store in `activeSessions` Set
+3. Generate an expiring session token signed with `AUTH_SECRET`
 4. Set `gutter-session` cookie (HTTP-only, SameSite=lax, 30-day expiry)
-5. Middleware checks token on protected routes
+5. Middleware verifies the token signature and expiry on protected routes
 
-**Logout:** `DELETE /api/auth` → revokes token, deletes cookie
+**Logout:** `DELETE /api/auth` → deletes the browser cookie
 
 **Security:**
 - Rate limited (5 attempts/min)
 - Bcrypt password hashing
-- Cryptographically secure tokens (32 bytes random)
+- HMAC-SHA-256 signed tokens with cryptographically secure nonces
 - HTTP-only cookies (no JS access)
 - Failed login attempts logged to `security.log`
 
@@ -326,7 +322,7 @@ See [CONFIGURATION.md](CONFIGURATION.md) for full details.
 
 **Backups:**
 - Journal DB auto-backups daily to `./backups/` (last 7 retained)
-- Manual trigger: `triggerBackup()` from `lib/journal-db.ts`
+- Manual trigger: `triggerBackup()` from `lib/db.ts`
 
 **Monitoring:**
 - Failed auth attempts → `security.log`

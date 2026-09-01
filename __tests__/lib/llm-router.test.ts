@@ -119,7 +119,7 @@ describe("getLLMInfo()", () => {
 	test("returns default provider (ollama)", () => {
 		const info = getLLMInfo();
 		expect(info.provider).toBe("ollama");
-		expect(info.model).toBe("llama3.1:8b");
+		expect(info.model).toBe("qwen3:latest");
 	});
 
 	test("returns configured provider", () => {
@@ -154,7 +154,7 @@ describe("Ollama provider", () => {
 		});
 
 		const payload = JSON.parse(mockFetch.lastOptions.body);
-		expect(payload.model).toBe("llama3.1:8b");
+		expect(payload.model).toBe("qwen3:latest");
 		expect(payload.messages).toEqual([{ role: "user", content: "Test" }]);
 		expect(payload.options.temperature).toBe(0.5);
 		expect(payload.stream).toBe(false);

@@ -1,38 +1,11 @@
-import { describe, expect, it, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, expect, it, beforeAll, beforeEach } from "vitest";
 import { getDb } from "@/lib/db";
-import { unlinkSync, existsSync } from "node:fs";
-
-const TEST_DB_PATH = "./test-gutter.db";
-const TEST_DB_WAL = "./test-gutter.db-wal";
-const TEST_DB_SHM = "./test-gutter.db-shm";
-
-// Override DB path for tests
-process.env.DATABASE_PATH = TEST_DB_PATH;
-
-function cleanupTestDb() {
-	[TEST_DB_PATH, TEST_DB_WAL, TEST_DB_SHM].forEach((path) => {
-		if (existsSync(path)) {
-			try {
-				unlinkSync(path);
-			} catch (err) {
-				// Ignore cleanup errors
-			}
-		}
-	});
-}
 
 describe("Database Operations", () => {
 	let db: ReturnType<typeof getDb>;
 
 	beforeAll(() => {
-		cleanupTestDb();
 		db = getDb();
-	});
-
-	afterAll(() => {
-		// Don't close the DB - it's a global singleton that other tests may still need
-		// Vitest will properly clean up at the end of the test run
-		cleanupTestDb();
 	});
 
 	beforeEach(() => {

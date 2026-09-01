@@ -54,7 +54,7 @@ export const env = {
 
 	// Auth
 	authPasswordHash: optional("AUTH_PASSWORD_HASH", ""),
-	authSecret: optional("AUTH_SECRET", "gutter-default-secret-change-me"),
+	authSecret: optional("AUTH_SECRET", ""),
 	sessionMaxAge: optionalInt("SESSION_MAX_AGE_DAYS", 30),
 
 	// Database

@@ -142,7 +142,7 @@ export function validateTask(task: {
 		if (typeof task.status !== "string") {
 			errors.push("Status must be a string");
 		} else if (
-			!["open", "in-progress", "blocked", "done", "cancelled"].includes(
+			!["open", "in-progress", "blocked", "done", "killed", "migrated"].includes(
 				task.status,
 			)
 		) {

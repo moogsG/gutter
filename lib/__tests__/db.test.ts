@@ -1,8 +1,11 @@
-import { existsSync, unlinkSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import Database from "@/lib/sqlite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const TEST_DB_PATH = "./test-tasks.db";
+const TEST_DB_DIR = mkdtempSync(join(tmpdir(), "gutter-db-unit-"));
+const TEST_DB_PATH = join(TEST_DB_DIR, "tasks.db");
 
 describe("Database operations", () => {
 	let db: Database;
@@ -40,13 +43,7 @@ describe("Database operations", () => {
 	afterAll(() => {
 		// Close this test's isolated DB instance (not the global singleton)
 		db.close();
-		if (existsSync(TEST_DB_PATH)) {
-			unlinkSync(TEST_DB_PATH);
-		}
-		// Clean up WAL files
-		[`${TEST_DB_PATH}-wal`, `${TEST_DB_PATH}-shm`].forEach((f) => {
-			if (existsSync(f)) unlinkSync(f);
-		});
+		rmSync(TEST_DB_DIR, { recursive: true, force: true });
 	});
 
 	describe("journal_entries CRUD", () => {
@@ -92,14 +89,14 @@ describe("Database operations", () => {
 			).run(id, "2026-03-10", "task", "Completeable task", "open", 1);
 
 			db.prepare("UPDATE journal_entries SET status = ? WHERE id = ?").run(
-				"complete",
+				"done",
 				id,
 			);
 
 			const entry = db
 				.prepare("SELECT * FROM journal_entries WHERE id = ?")
 				.get(id);
-			expect(entry).toMatchObject({ status: "complete" });
+			expect(entry).toMatchObject({ status: "done" });
 		});
 
 		it("deletes an entry", () => {

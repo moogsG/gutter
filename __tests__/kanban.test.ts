@@ -10,19 +10,19 @@ import { describe, it, expect } from "vitest";
 // ---------------------------------------------------------------------------
 const KANBAN_STATUS_MAP: Record<string, string[]> = {
   todo: ["open"],
-  "in-progress": ["in-progress", "in_progress"],
+  "in-progress": ["in-progress"],
   blocked: ["blocked"],
-  done: ["complete", "done"],
+  done: ["done"],
 };
 
 const COLUMN_TO_DB_STATUS: Record<string, string> = {
   todo: "open",
   "in-progress": "in-progress",
   blocked: "blocked",
-  done: "complete",
+  done: "done",
 };
 
-const ALLOWED_MOVE_STATUSES = ["open", "in-progress", "blocked", "complete"];
+const ALLOWED_MOVE_STATUSES = ["open", "in-progress", "blocked", "done"];
 
 // ---------------------------------------------------------------------------
 // Helper: simulate what the GET handler resolves for a given ?status= param
@@ -59,10 +59,10 @@ describe("Kanban API — GET /api/tasks status filtering", () => {
     expect(result).toEqual(["open"]);
   });
 
-  it("maps kanban 'in-progress' to both in-progress variants", () => {
+  it("maps kanban 'in-progress' to the canonical status", () => {
     const result = resolveStatusValues("in-progress");
     expect(result).toContain("in-progress");
-    expect(result).toContain("in_progress");
+    expect(result).toEqual(["in-progress"]);
   });
 
   it("maps kanban 'blocked' to DB status 'blocked'", () => {
@@ -70,10 +70,9 @@ describe("Kanban API — GET /api/tasks status filtering", () => {
     expect(result).toEqual(["blocked"]);
   });
 
-  it("maps kanban 'done' to both DB complete/done variants", () => {
+  it("maps kanban 'done' to the canonical status", () => {
     const result = resolveStatusValues("done");
-    expect(result).toContain("complete");
-    expect(result).toContain("done");
+    expect(result).toEqual(["done"]);
   });
 
   it("accepts comma-separated statuses", () => {
@@ -114,8 +113,8 @@ describe("Kanban API — POST /api/tasks move action", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("accepts valid move to 'complete' (done column)", () => {
-    const result = validateMoveAction("task-123", "complete");
+  it("accepts valid move to 'done'", () => {
+    const result = validateMoveAction("task-123", "done");
     expect(result.ok).toBe(true);
   });
 
@@ -149,8 +148,8 @@ describe("Kanban — column to DB status mapping", () => {
     expect(COLUMN_TO_DB_STATUS["blocked"]).toBe("blocked");
   });
 
-  it("done column maps to 'complete' DB status", () => {
-    expect(COLUMN_TO_DB_STATUS["done"]).toBe("complete");
+  it("done column maps to 'done' DB status", () => {
+    expect(COLUMN_TO_DB_STATUS["done"]).toBe("done");
   });
 
   it("all four kanban columns have a DB status mapping", () => {

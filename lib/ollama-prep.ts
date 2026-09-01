@@ -5,7 +5,7 @@
  *
  * All config via ENV:
  *   OLLAMA_URL          - Ollama base URL (default: http://localhost:11434)
- *   OLLAMA_MODEL        - Model to use (default: llama3.1:8b)
+ *   OLLAMA_MODEL        - Model to use (default: qwen3:latest)
  *   JIRA_URL            - Jira instance URL (default: https://gradient-msp.atlassian.net)
  *   JIRA_EMAIL          - Jira login email
  *   JIRA_API_TOKEN      - Jira API token
@@ -319,7 +319,7 @@ export async function generateMeetingPrep(
 	context?: string,
 ): Promise<string> {
 	const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
-	const model = process.env.OLLAMA_MODEL || "llama3.1:8b";
+	const model = process.env.OLLAMA_MODEL || "qwen3:latest";
 
 	// Fetch vector context in parallel with the rest of setup — never blocks
 	const vectorContext = await fetchVectorContext(title).catch(() => "");

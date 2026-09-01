@@ -12,23 +12,22 @@ export async function GET(req: NextRequest) {
 
 	const db = getDb();
 
-	// Fetch from projects table with entry counts
+	// Collections are the canonical project relationship for journal_entries.
 	const projects = db
 		.prepare(`
       SELECT
         p.id,
-        p.name,
-        p.description,
-        p.color,
+        p.title AS name,
+        NULL AS description,
+        NULL AS color,
         p.icon,
-        p.active,
+        1 AS active,
         COUNT(je.id) as total,
         SUM(CASE WHEN je.status IN ('open', 'in-progress') THEN 1 ELSE 0 END) as open,
         SUM(CASE WHEN je.status = 'done' THEN 1 ELSE 0 END) as completed,
         MAX(je.updated_at) as last_activity
-      FROM projects p
+      FROM collections p
       LEFT JOIN journal_entries je ON je.collection_id = p.id
-      WHERE p.active = 1
       GROUP BY p.id
       ORDER BY open DESC, last_activity DESC
     `)

@@ -171,7 +171,7 @@ describe("PATCH /api/journal/[id]", () => {
 			body: JSON.stringify({
 				status: "in-progress",
 				text: "Updated text",
-				signifier: "○",
+				signifier: "appointment",
 			}),
 		});
 
@@ -181,7 +181,7 @@ describe("PATCH /api/journal/[id]", () => {
 		const updated = db.prepare("SELECT * FROM journal_entries WHERE id = ?").get("test-patch-7") as any;
 		expect(updated.status).toBe("in-progress");
 		expect(updated.text).toBe("Updated text");
-		expect(updated.signifier).toBe("○");
+		expect(updated.signifier).toBe("appointment");
 	});
 
 	it("updates sort_order", async () => {
