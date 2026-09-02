@@ -28,6 +28,7 @@ export default function MigratePage() {
 	const [migrationFailed, setMigrationFailed] = useState(false);
 	const [failedKillId, setFailedKillId] = useState<string | null>(null);
 	const [killingId, setKillingId] = useState<string | null>(null);
+	const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
 	const todayDate = getTodayDateString();
 	const { data: entries = [] } = useGetUnresolvedQuery({
@@ -65,13 +66,16 @@ export default function MigratePage() {
 		}
 	};
 
-	const handleKillEntry = async (id: string) => {
+	const handleKillEntry = async (id: string, text: string) => {
+		if (!confirm(`Strike out "${text}"? You can reopen it later from its journal day.`)) return;
 		setMutationError(null);
+		setStatusMessage(null);
 		setMigrationFailed(false);
 		setKillingId(id);
 		try {
 			await updateEntry({ id, status: "killed" }).unwrap();
 			setFailedKillId(null);
+			setStatusMessage(`${text} was struck out.`);
 		} catch {
 			setFailedKillId(id);
 			setMutationError("Could not kill that entry. It remains in the migration list.");
@@ -108,6 +112,7 @@ export default function MigratePage() {
 							{mutationError}
 						</p>
 					)}
+					{statusMessage && <p role="status" className="text-sm text-muted-foreground">{statusMessage}</p>}
 
 					{selectedIds.length > 0 && (
 						<Card>
@@ -155,6 +160,7 @@ export default function MigratePage() {
 												type="checkbox"
 												checked={selectedIds.includes(entry.id)}
 												onChange={() => handleToggleEntry(entry.id)}
+												aria-label={`Select ${entry.text} for migration`}
 												className="mt-1 shrink-0 w-4 h-4 touch-manipulation"
 											/>
 											<SignifierIcon
@@ -178,7 +184,7 @@ export default function MigratePage() {
 											<Button
 												variant="ghost"
 												size="sm"
-												onClick={() => handleKillEntry(entry.id)}
+												onClick={() => handleKillEntry(entry.id, entry.text)}
 												disabled={killingId === entry.id}
 												aria-label={failedKillId === entry.id
 													? `Try killing ${entry.text} again`

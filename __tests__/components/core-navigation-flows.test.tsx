@@ -156,12 +156,14 @@ describe("core navigation flows", () => {
 
 	it("loads a collection page through its id-backed detail path", async () => {
 		const { default: CollectionPage } = await import("@/app/collections/[id]/page");
+		let view!: ReturnType<typeof render>;
 		await act(async () => {
-			render(<CollectionPage params={Promise.resolve({ id: "col-reading" })} />);
+			view = render(<CollectionPage params={Promise.resolve({ id: "col-reading" })} />);
 		});
 
 		await waitFor(() => expect(getCollectionQuery).toHaveBeenCalledWith("col-reading"));
 		expect(await screen.findByRole("heading", { name: "Reading" })).toBeInTheDocument();
 		expect(screen.getByText("Read chapter")).toBeInTheDocument();
+		expect(view.container.querySelector("a button, button a")).toBeNull();
 	});
 });

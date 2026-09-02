@@ -129,8 +129,8 @@ export default function JournalPage() {
 	);
 
 	const handleKill = useCallback(
-		(id: string) => {
-			updateEntry({ id, status: "killed", _date: currentDate });
+		async (id: string) => {
+			await updateEntry({ id, status: "killed", _date: currentDate }).unwrap();
 		},
 		[updateEntry, currentDate],
 	);

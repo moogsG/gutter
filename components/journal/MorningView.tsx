@@ -162,18 +162,18 @@ export function MorningView({ date, onOpenCapture }: MorningViewProps) {
     return (
       <div className="space-y-4 py-6">
         <div className="text-center space-y-2">
-          <h3 className="text-lg font-medium text-foreground">Nothing surfaced right now</h3>
+          <h3 className="text-lg font-medium text-foreground">Set up Today Focus</h3>
           <p className="text-sm text-muted-foreground">
-            Your Today Focus prompts exist, but none produced visible items for this run.
+            Choose the information you want ready when you start your day.
           </p>
         </div>
-        <div className="flex justify-center gap-3">
-          <Link href="/settings/morning-view">
-            <Button variant="outline" size="sm" className="gap-2">
+        <div data-testid="today-focus-empty-actions" className="flex flex-wrap justify-center gap-3">
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link href="/settings/morning-view">
               <Settings2 className="w-4 h-4" />
-              Review Today Focus Settings
-            </Button>
-          </Link>
+              Configure Today Focus
+            </Link>
+          </Button>
           <Button onClick={handleRefresh} variant="outline" size="sm" className="gap-2" disabled={isRefreshing}>
             <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
             Refresh
@@ -200,12 +200,12 @@ export function MorningView({ date, onOpenCapture }: MorningViewProps) {
             Today Focus
           </h3>
           <div className="flex items-center gap-1">
-            <Link href="/settings/morning-view">
-              <Button variant="ghost" size="sm" className="h-7 px-2">
+            <Button asChild variant="ghost" size="sm" className="h-7 px-2">
+              <Link href="/settings/morning-view" aria-label="Configure Today Focus">
                 <Settings2 className="w-3.5 h-3.5" />
-              </Button>
-            </Link>
-            <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={isRefreshing} className="h-7 px-2">
+              </Link>
+            </Button>
+            <Button aria-label="Refresh Today Focus" variant="ghost" size="sm" onClick={handleRefresh} disabled={isRefreshing} className="h-7 px-2">
               <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
             </Button>
           </div>
@@ -214,8 +214,8 @@ export function MorningView({ date, onOpenCapture }: MorningViewProps) {
         {isDateAwareContext ? (
           <div className="rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs text-muted-foreground">
             {meta.dateMode === "past"
-              ? `Viewing ${date}. Calendar, meeting prep, and health widgets are scoped to that day. Task/work widgets still show live context so the board does not fake a historical snapshot.`
-              : `Viewing ${date}. Date-specific widgets are scoped to that day, while task/work widgets stay live so tomorrow-planning does not pretend the future already happened.`}
+              ? `Viewing ${date}. Calendar, meeting prep, and health information is scoped to that day. Tasks still show live context rather than a reconstructed historical snapshot.`
+              : `Viewing ${date}. Date-specific information is scoped to that day, while tasks stay live for planning.`}
           </div>
         ) : null}
 

@@ -450,8 +450,8 @@ export default function DayDetailPage() {
 	);
 
 	const handleKill = useCallback(
-		(id: string) => {
-			updateEntry({ id, status: "killed", _date: date });
+		async (id: string) => {
+			await updateEntry({ id, status: "killed", _date: date }).unwrap();
 		},
 		[updateEntry, date],
 	);

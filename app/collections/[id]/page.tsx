@@ -45,12 +45,12 @@ export default function CollectionPage({
 			<div className="flex-1 overflow-auto p-6">
 				<div className="max-w-4xl mx-auto">
 					<div className="flex items-center gap-4 mb-6">
-						<Link href="/collections">
-							<Button variant="ghost" size="sm">
+						<Button asChild variant="ghost" size="sm">
+							<Link href="/collections">
 								<ArrowLeft className="w-4 h-4 mr-2" />
 								Back
-							</Button>
-						</Link>
+							</Link>
+						</Button>
 						<h2 className="text-2xl font-bold text-foreground">
 							{collection.title}
 						</h2>
