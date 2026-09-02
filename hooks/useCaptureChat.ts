@@ -64,7 +64,11 @@ function detectMode(text: string): ProcessMode {
   return "talk";
 }
 
-export function useCaptureChat(date: string, onEntriesCreated?: () => void) {
+export function useCaptureChat(
+  date: string,
+  onEntriesCreated?: () => void,
+  captureMode: "default" | "task" = "default",
+) {
   const [state, setState] = useState<ConversationState>(() => loadState(date));
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -112,7 +116,8 @@ export function useCaptureChat(date: string, onEntriesCreated?: () => void) {
 
   const processMessage = useCallback(async (text: string) => {
     const cleaned = cleanCaptureText(text);
-    const mode = detectMode(cleaned);
+    const mode = captureMode === "task" ? "organize" : detectMode(cleaned);
+    const requestText = captureMode === "task" ? `Create a task: ${cleaned}` : cleaned;
     addMessage({ role: "user", content: cleaned });
     setIsProcessing(true);
     setIsTyping(true);
@@ -122,7 +127,7 @@ export function useCaptureChat(date: string, onEntriesCreated?: () => void) {
       const res = await fetch("/api/journal/transcript/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: cleaned, mode, date, sessionId }),
+        body: JSON.stringify({ text: requestText, mode, date, sessionId }),
       });
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
@@ -155,7 +160,7 @@ export function useCaptureChat(date: string, onEntriesCreated?: () => void) {
     } finally {
       setIsProcessing(false);
     }
-  }, [date, addMessage, onEntriesCreated]);
+  }, [date, addMessage, onEntriesCreated, captureMode]);
 
   const handleSubmit = useCallback(async () => {
     const text = input.trim();

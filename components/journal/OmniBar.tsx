@@ -32,8 +32,6 @@ import { useLazySearchEntriesQuery, useLazySemanticSearchQuery } from "@/store/a
 import type { JournalEntry, SemanticSearchResult, Signifier } from "@/types/journal";
 
 interface OmniBarProps {
-  onNavigateDate?: (date: string) => void;
-  currentDate?: string;
   onOpenShortcuts?: () => void;
 }
 
@@ -153,7 +151,7 @@ function formatEntryDate(dateStr: string): string {
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
-export function OmniBar({ onNavigateDate, currentDate, onOpenShortcuts }: OmniBarProps) {
+export function OmniBar({ onOpenShortcuts }: OmniBarProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<JournalEntry[]>([]);
@@ -244,24 +242,18 @@ export function OmniBar({ onNavigateDate, currentDate, onOpenShortcuts }: OmniBa
       // Date navigation
       if (value.startsWith("date:")) {
         const date = value.slice(5);
-        if (onNavigateDate) {
-          onNavigateDate(date);
-        }
-        router.push("/");
+        router.push(`/day/${date}`);
         return;
       }
 
       // Entry — navigate to that day
       if (value.startsWith("entry:")) {
         const [, date] = value.split(":");
-        if (onNavigateDate) {
-          onNavigateDate(date);
-        }
-        router.push("/");
+        router.push(`/day/${date}`);
         return;
       }
     },
-    [router, onNavigateDate, onOpenShortcuts]
+    [router, onOpenShortcuts]
   );
 
   const parsedDate = query.trim().length > 0 ? parseNaturalDate(query) : null;

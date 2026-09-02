@@ -27,12 +27,16 @@ function getTodayDateString(): string {
 
 export default function MigratePage() {
 	const [selectedIds, setSelectedIds] = useState<string[]>([]);
+	const [mutationError, setMutationError] = useState<string | null>(null);
+	const [migrationFailed, setMigrationFailed] = useState(false);
+	const [failedKillId, setFailedKillId] = useState<string | null>(null);
+	const [killingId, setKillingId] = useState<string | null>(null);
 
 	const todayDate = getTodayDateString();
 	const { data: entries = [] } = useGetUnresolvedQuery({
 		before: todayDate,
 	});
-	const [migrateEntries] = useMigrateEntriesMutation();
+	const [migrateEntries, { isLoading: isMigrating }] = useMigrateEntriesMutation();
 	const [updateEntry] = useUpdateEntryMutation();
 
 	const handleToggleEntry = (id: string) => {
@@ -43,6 +47,8 @@ export default function MigratePage() {
 
 	const handleMigrateSelected = async () => {
 		if (selectedIds.length === 0) return;
+		setMutationError(null);
+		setMigrationFailed(false);
 		try {
 			const result = await migrateEntries({
 				entryIds: selectedIds,
@@ -57,11 +63,24 @@ export default function MigratePage() {
 			setSelectedIds([]);
 		} catch {
 			toast.error("Failed to migrate selected entries");
+			setMigrationFailed(true);
+			setMutationError("Could not migrate the selected entries. Your selection is still here.");
 		}
 	};
 
-	const handleKillEntry = (id: string) => {
-		updateEntry({ id, status: "killed" });
+	const handleKillEntry = async (id: string) => {
+		setMutationError(null);
+		setMigrationFailed(false);
+		setKillingId(id);
+		try {
+			await updateEntry({ id, status: "killed" }).unwrap();
+			setFailedKillId(null);
+		} catch {
+			setFailedKillId(id);
+			setMutationError("Could not kill that entry. It remains in the migration list.");
+		} finally {
+			setKillingId(null);
+		}
 	};
 
 	useEffect(() => {
@@ -87,6 +106,12 @@ export default function MigratePage() {
 						</p>
 					</div>
 
+					{mutationError && (
+						<p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+							{mutationError}
+						</p>
+					)}
+
 					{selectedIds.length > 0 && (
 						<Card>
 							<CardContent className="py-3 px-3 sm:px-6">
@@ -99,11 +124,12 @@ export default function MigratePage() {
 									</span>
 									<Button
 										onClick={handleMigrateSelected}
+										disabled={isMigrating}
 										size="sm"
 										className="shrink-0"
 									>
 										<ArrowRight className="w-4 h-4 mr-2" />
-										Migrate
+										{migrationFailed ? "Try migration again" : isMigrating ? "Migrating…" : "Migrate"}
 									</Button>
 								</div>
 							</CardContent>
@@ -156,6 +182,10 @@ export default function MigratePage() {
 												variant="ghost"
 												size="sm"
 												onClick={() => handleKillEntry(entry.id)}
+												disabled={killingId === entry.id}
+												aria-label={failedKillId === entry.id
+													? `Try killing ${entry.text} again`
+													: `Kill ${entry.text}`}
 												className="w-7 h-7 p-0 shrink-0 touch-manipulation"
 											>
 												<X className="w-4 h-4" />

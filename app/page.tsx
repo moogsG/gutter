@@ -76,15 +76,6 @@ export default function JournalPage() {
 		);
 	}, [currentDate, dispatch]);
 
-	// Listen for OmniBar date navigation
-	useEffect(() => {
-		const handler = (e: Event) => {
-			const date = (e as CustomEvent<string>).detail;
-			if (date) setCurrentDate(date);
-		};
-		window.addEventListener("omnibar-navigate-date", handler);
-		return () => window.removeEventListener("omnibar-navigate-date", handler);
-	}, []);
 
 	const handlePrevDay = useCallback(() => {
 		setCurrentDate((prev) => {
@@ -169,6 +160,14 @@ export default function JournalPage() {
 	);
 
 	const [captureOpen, setCaptureOpen] = useState(false);
+	const [captureMode, setCaptureMode] = useState<"default" | "task">("default");
+
+	useEffect(() => {
+		if (new URLSearchParams(window.location.search).get("capture") === "task") {
+			setCaptureMode("task");
+			setCaptureOpen(true);
+		}
+	}, []);
 
 	const handleEntriesCreated = useCallback(() => {
 		dispatch(
@@ -188,6 +187,7 @@ export default function JournalPage() {
 	}, [dispatch, currentDate]);
 
 	const handleOpenCapture = useCallback(() => {
+		setCaptureMode("default");
 		setCaptureOpen(true);
 	}, []);
 
@@ -244,6 +244,7 @@ export default function JournalPage() {
 			/>
 			<CaptureDialog
 				date={currentDate}
+				captureMode={captureMode}
 				onEntriesCreated={handleEntriesCreated}
 				open={captureOpen}
 				onOpenChange={setCaptureOpen}

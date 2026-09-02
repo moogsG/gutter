@@ -18,21 +18,26 @@ export default function FutureLogPage() {
 	const [selectedSignifier, setSelectedSignifier] = useState<Signifier>("task");
 	const [targetMonth, setTargetMonth] = useState("");
 	const [text, setText] = useState("");
+	const [createError, setCreateError] = useState<string | null>(null);
 
 	const { data: entries = [] } = useGetFutureLogQuery();
-	const [createEntry] = useCreateFutureLogEntryMutation();
+	const [createEntry, { isLoading: isCreating }] = useCreateFutureLogEntryMutation();
 
-	const handleSubmit = (e: React.FormEvent) => {
+	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!text.trim() || !targetMonth) return;
 
-		createEntry({
-			target_month: targetMonth,
-			signifier: selectedSignifier,
-			text: text.trim(),
-		});
-
-		setText("");
+		setCreateError(null);
+		try {
+			await createEntry({
+				target_month: targetMonth,
+				signifier: selectedSignifier,
+				text: text.trim(),
+			}).unwrap();
+			setText("");
+		} catch {
+			setCreateError("Could not add the future entry. Your draft is still here.");
+		}
 	};
 
 	// Group entries by month
@@ -99,13 +104,16 @@ export default function FutureLogPage() {
 									placeholder="What do you want to remember?"
 									className="h-9"
 								/>
+								{createError && (
+									<p role="alert" className="text-sm text-destructive">{createError}</p>
+								)}
 								<Button
 									type="submit"
-									disabled={!text.trim() || !targetMonth}
+									disabled={!text.trim() || !targetMonth || isCreating}
 									size="sm"
 									className="w-full sm:w-auto"
 								>
-									Add Entry
+									{createError ? "Try again" : isCreating ? "Adding…" : "Add Entry"}
 								</Button>
 							</form>
 						</CardContent>

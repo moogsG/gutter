@@ -302,7 +302,7 @@ export default function DayDetailPage() {
 	const [deleteEntry] = useDeleteEntryMutation();
 	const [migrateEntries] = useMigrateEntriesMutation();
 
-	const loadDayData = async () => {
+	const loadDayData = useCallback(async () => {
 		setLoading(true);
 		try {
 			// Fetch calendar events
@@ -325,7 +325,7 @@ export default function DayDetailPage() {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [date]);
 
 	useEffect(() => {
 		loadDayData();
