@@ -40,7 +40,25 @@ export function FutureLogEntryItem({
 			});
 			setEditing(false);
 		} catch {
-			setError("Could not update this future entry.");
+			setError("Could not update this future entry. Try again.");
+		}
+	};
+
+	const markMigrated = async () => {
+		setError(null);
+		try {
+			await onMarkMigrated(entry.id);
+		} catch {
+			setError("Could not mark this future entry migrated. Try again.");
+		}
+	};
+
+	const deleteEntry = async () => {
+		setError(null);
+		try {
+			await onDelete(entry.id);
+		} catch {
+			setError("Could not delete this future entry. Try again.");
 		}
 	};
 
@@ -74,22 +92,25 @@ export function FutureLogEntryItem({
 	}
 
 	return (
-		<div className={`flex items-start gap-2.5 py-1.5 ${entry.migrated ? "opacity-60" : ""}`}>
-			<SignifierIcon signifier={entry.signifier} status={entry.migrated ? "migrated" : "open"} />
-			<p className="min-w-0 flex-1 break-words text-sm text-foreground">
-				{entry.text}{entry.migrated ? " (migrated)" : ""}
-			</p>
-			<Button type="button" variant="ghost" size="icon-sm" aria-label={`Edit ${entry.text}`} onClick={() => setEditing(true)}>
-				<Pencil />
-			</Button>
-			{!entry.migrated && (
-				<Button type="button" variant="ghost" size="icon-sm" aria-label={`Mark ${entry.text} migrated`} onClick={() => onMarkMigrated(entry.id)}>
-					<Check />
+		<div className="space-y-1">
+			<div className={`flex items-start gap-2.5 py-1.5 ${entry.migrated ? "opacity-60" : ""}`}>
+				<SignifierIcon signifier={entry.signifier} status={entry.migrated ? "migrated" : "open"} />
+				<p className="min-w-0 flex-1 break-words text-sm text-foreground">
+					{entry.text}{entry.migrated ? " (migrated)" : ""}
+				</p>
+				<Button type="button" variant="ghost" size="icon-sm" aria-label={`Edit ${entry.text}`} onClick={() => { setError(null); setEditing(true); }}>
+					<Pencil />
 				</Button>
-			)}
-			<Button type="button" variant="ghost" size="icon-sm" aria-label={`Delete ${entry.text}`} onClick={() => onDelete(entry.id)}>
-				<Trash2 />
-			</Button>
+				{!entry.migrated && (
+					<Button type="button" variant="ghost" size="icon-sm" aria-label={`Mark ${entry.text} migrated`} onClick={markMigrated}>
+						<Check />
+					</Button>
+				)}
+				<Button type="button" variant="ghost" size="icon-sm" aria-label={`Delete ${entry.text}`} onClick={deleteEntry}>
+					<Trash2 />
+				</Button>
+			</div>
+			{error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 		</div>
 	);
 }

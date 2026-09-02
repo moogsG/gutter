@@ -25,7 +25,12 @@ export default function FutureLogPage() {
 	const [text, setText] = useState("");
 	const [createError, setCreateError] = useState<string | null>(null);
 
-	const { data: entries = [] } = useGetFutureLogQuery();
+	const {
+		data: entries = [],
+		isError: isFutureLogError,
+		isFetching: isFutureLogFetching,
+		refetch: refetchFutureLog,
+	} = useGetFutureLogQuery();
 	const [createEntry, { isLoading: isCreating }] = useCreateFutureLogEntryMutation();
 	const [updateFutureEntry] = useUpdateFutureLogEntryMutation();
 	const [markFutureEntryMigrated] = useMarkFutureLogEntryMigratedMutation();
@@ -139,7 +144,23 @@ export default function FutureLogPage() {
 						</CardContent>
 					</Card>
 
-					{sortedMonths.length === 0 ? (
+					{isFutureLogError ? (
+						<Card>
+							<CardContent className="space-y-3 py-10 text-center sm:py-12">
+								<p role="alert" className="text-sm text-destructive">
+									The Future Log is unavailable. Your entries could not be loaded.
+								</p>
+								<Button
+									type="button"
+									size="sm"
+									disabled={isFutureLogFetching}
+									onClick={() => refetchFutureLog()}
+								>
+									{isFutureLogFetching ? "Retrying…" : "Retry loading Future Log"}
+								</Button>
+							</CardContent>
+						</Card>
+					) : sortedMonths.length === 0 ? (
 						<Card>
 							<CardContent className="py-10 sm:py-12 text-center">
 								<p className="text-sm text-muted-foreground">

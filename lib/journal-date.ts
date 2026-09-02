@@ -1,5 +1,17 @@
-export const JOURNAL_TIME_ZONE =
+const configuredJournalTimeZone =
 	process.env.NEXT_PUBLIC_JOURNAL_TIME_ZONE?.trim() || "America/Cancun";
+
+try {
+	new Intl.DateTimeFormat("en-US", {
+		timeZone: configuredJournalTimeZone,
+	}).format();
+} catch {
+	throw new Error(
+		`Invalid NEXT_PUBLIC_JOURNAL_TIME_ZONE: ${configuredJournalTimeZone} is not an IANA time zone`,
+	);
+}
+
+export const JOURNAL_TIME_ZONE = configuredJournalTimeZone;
 
 export function getJournalDate(
 	instant: Date = new Date(),

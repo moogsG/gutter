@@ -40,6 +40,65 @@ describe("/api/future-log/[id] lifecycle", () => {
 		});
 	});
 
+	it.each(["•", "→", "!"])(
+		"edits text and month on an entry with the legacy %s signifier without changing its meaning",
+		async (legacySignifier) => {
+			getDb().prepare("UPDATE future_log SET signifier = ? WHERE id = ?").run(legacySignifier, "fl-lifecycle");
+
+			const response = await PATCH(
+				new NextRequest("http://localhost/api/future-log/fl-lifecycle", {
+					method: "PATCH",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						text: "Legacy updated",
+						signifier: legacySignifier,
+						target_month: "2026-12",
+					}),
+				}),
+				params,
+			);
+
+			expect(response.status).toBe(200);
+			expect(await response.json()).toMatchObject({
+				text: "Legacy updated",
+				signifier: legacySignifier,
+				target_month: "2026-12",
+			});
+		},
+	);
+
+	it.each([
+		[{ signifier: "unknown" }, "Invalid signifier"],
+		[{ text: "   " }, "text must be a non-empty string"],
+		[{ target_month: "December 2026" }, "target_month must use YYYY-MM format"],
+	])("rejects malformed update %#", async (body, error) => {
+		const response = await PATCH(
+			new NextRequest("http://localhost/api/future-log/fl-lifecycle", {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body),
+			}),
+			params,
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({ error });
+	});
+
+	it("returns 404 when editing an entry that does not exist", async () => {
+		const response = await PATCH(
+			new NextRequest("http://localhost/api/future-log/fl-missing", {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ text: "Still missing" }),
+			}),
+			{ params: Promise.resolve({ id: "fl-missing" }) },
+		);
+
+		expect(response.status).toBe(404);
+		expect(await response.json()).toEqual({ error: "Future entry not found" });
+	});
+
 	it("marks an entry migrated explicitly", async () => {
 		const response = await PATCH(
 			new NextRequest("http://localhost/api/future-log/fl-lifecycle", {
@@ -68,5 +127,15 @@ describe("/api/future-log/[id] lifecycle", () => {
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({ success: true });
 		expect(getDb().prepare("SELECT id FROM future_log WHERE id = ?").get("fl-lifecycle")).toBeUndefined();
+	});
+
+	it("returns 404 when deleting an entry that does not exist", async () => {
+		const response = await DELETE(
+			new NextRequest("http://localhost/api/future-log/fl-missing", { method: "DELETE" }),
+			{ params: Promise.resolve({ id: "fl-missing" }) },
+		);
+
+		expect(response.status).toBe(404);
+		expect(await response.json()).toEqual({ error: "Future entry not found" });
 	});
 });

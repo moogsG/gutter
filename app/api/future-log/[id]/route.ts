@@ -6,14 +6,17 @@ import {
 import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { sanitizeText, validateId } from "@/lib/validation";
-import type { FutureLogEntry, Signifier } from "@/types/journal";
+import type { FutureLogEntry } from "@/types/journal";
 
-const SIGNIFIERS: Signifier[] = [
+const SIGNIFIERS = [
 	"task",
 	"appointment",
 	"note",
 	"memory",
 	"important",
+	"•",
+	"→",
+	"!",
 ];
 
 function serializeEntry(
