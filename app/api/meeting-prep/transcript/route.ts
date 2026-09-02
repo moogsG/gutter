@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
-import { env } from "@/lib/env";
+import {
+	isValidMeetingOccurrenceDate,
+	resolveMeetingOccurrenceDate,
+} from "@/lib/meeting-occurrence";
+import { updateMeetingPrep } from "@/lib/meeting-prep-update";
+import { summarizeMeetingTranscript } from "@/lib/meeting-transcript";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { upsertMeetingTranscript } from "@/lib/vector-store";
 
@@ -15,7 +20,8 @@ export async function POST(request: NextRequest) {
 	if (limited) return limited;
 
 	try {
-		const { eventId, title, time, calendar, transcript } = await request.json();
+		const { eventId, title, time, calendar, transcript, occurrenceDate } =
+			await request.json();
 
 		if (!eventId || !transcript) {
 			return Response.json(
@@ -23,19 +29,29 @@ export async function POST(request: NextRequest) {
 				{ status: 400 },
 			);
 		}
+		if (
+			occurrenceDate !== undefined &&
+			!isValidMeetingOccurrenceDate(occurrenceDate)
+		) {
+			return Response.json(
+				{ error: "occurrenceDate must be a valid YYYY-MM-DD date" },
+				{ status: 400 },
+			);
+		}
 
 		const db = getDb();
 		const now = new Date().toISOString();
-		const occurrenceDate = time
-			? new Date(time).toISOString().split("T")[0]
-			: new Date().toISOString().split("T")[0];
+		const normalizedOccurrenceDate = resolveMeetingOccurrenceDate({
+			occurrenceDate,
+			time,
+		});
 
 		// Upsert meeting prep row with transcript (keyed on event_id + occurrence_date)
 		const existing = db
 			.prepare(
 				"SELECT id FROM meeting_prep WHERE event_id = ? AND occurrence_date = ?",
 			)
-			.get(eventId, occurrenceDate) as any;
+			.get(eventId, normalizedOccurrenceDate) as any;
 
 		let id: string;
 		if (existing) {
@@ -54,7 +70,7 @@ export async function POST(request: NextRequest) {
 				title || "",
 				time || "",
 				calendar || "",
-				occurrenceDate,
+				normalizedOccurrenceDate,
 				"none",
 				transcript,
 				now,
@@ -62,34 +78,36 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		// Send to Jynx for summarization via openclaw agent CLI
-		try {
-			const { exec: execCb } = await import("node:child_process");
-			const { promisify } = await import("node:util");
-			const execAsync = promisify(execCb);
-			const gutterUrl = `http://localhost:${env.port}`;
-			const summaryMessage = `Meeting transcript uploaded for "${title || "meeting"}" (${time || "unknown time"}). Summarize and extract action items. Update Gutter via: curl -sk ${gutterUrl}/api/meeting-prep/update -X POST -H "Content-Type: application/json" -d '{"eventId":"${eventId}","occurrenceDate":"${occurrenceDate}","summary":"...","actionItems":["item1","item2"]}'\n\nTranscript:\n${transcript.substring(0, 4000)}`;
-			execAsync(
-				`openclaw agent --agent main -m ${JSON.stringify(summaryMessage)} --json`,
-				{ timeout: 120_000 },
-			).catch((err: Error) =>
-				console.error("Transcript summary request failed:", err.message),
+		// Summarization is asynchronous. The transcript is already persisted, while the
+		// summary is only persisted after the agent returns valid JSON.
+		void summarizeMeetingTranscript(
+			{
+				eventId,
+				title: title || "Meeting",
+				time: time || "",
+				occurrenceDate: normalizedOccurrenceDate,
+				transcript,
+			},
+			{ updateMeetingPrep },
+		).catch((error: unknown) => {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error(
+				"Transcript summarization failed; transcript remains stored without a summary:",
+				message,
 			);
-		} catch (err) {
-			console.error("Failed to send transcript to Jynx:", err);
-		}
+		});
 
 		// Fire-and-forget embedding of transcript for RAG context
 		upsertMeetingTranscript({
 			id,
 			text: transcript,
 			title: title || "Meeting",
-			date: occurrenceDate,
+			date: normalizedOccurrenceDate,
 		}).catch((err) =>
 			console.error("[vector-store] transcript upsert failed:", err),
 		);
 
-		return Response.json({ ok: true, id });
+		return Response.json({ ok: true, id, summaryStatus: "pending" });
 	} catch (error) {
 		console.error("Transcript upload error:", error);
 		return Response.json(

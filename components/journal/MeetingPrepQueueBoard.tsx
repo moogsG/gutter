@@ -132,6 +132,7 @@ export function MeetingPrepQueueBoard({ date, onDateChange }: { date: string; on
         title: meeting.title,
         time: meeting.startDate,
         calendar: meeting.calendar,
+        occurrenceDate: meeting.occurrenceDate,
       }).unwrap();
     } finally {
       setPreppingId(null);

@@ -20,6 +20,7 @@ export const meetingPrepApi = createApi({
       title: string;
       time: string;
       calendar: string;
+      occurrenceDate?: string;
       context?: string;
     }>({
       query: (body) => ({
@@ -34,6 +35,7 @@ export const meetingPrepApi = createApi({
       title: string;
       time: string;
       calendar: string;
+      occurrenceDate?: string;
       transcript: string;
     }>({
       query: (body) => ({

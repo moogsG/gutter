@@ -89,6 +89,7 @@ export function MeetingDrawer({
       title: liveMeeting.title,
       time: meeting.time,
       calendar: liveMeeting.calendar,
+      occurrenceDate: liveMeeting.occurrenceDate,
       ...(prepContext.trim() ? { context: prepContext.trim() } : {}),
     });
     setPrepContext("");
@@ -102,6 +103,7 @@ export function MeetingDrawer({
       title: liveMeeting.title,
       time: meeting.time,
       calendar: liveMeeting.calendar,
+      occurrenceDate: liveMeeting.occurrenceDate,
       transcript: transcript.trim(),
     });
     setTranscript("");
