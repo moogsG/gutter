@@ -3,6 +3,7 @@
 import { CalendarDays, ChefHat, Loader2, RefreshCcw, ShoppingBasket } from "lucide-react";
 import { toast } from "sonner";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { GroceryChecklistCard } from "@/components/journal/GroceryChecklistCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ function getCancunTodayDate(): string {
 }
 
 export function MealPlanBoard({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {
-  const { data, isLoading, error, isFetching } = useGetMealPlanQuery(date);
+  const { data, isLoading, error, isFetching, refetch } = useGetMealPlanQuery(date);
   const [regenerateMealPlan, { isLoading: isRegenerating }] = useRegenerateMealPlanMutation();
   const [toggleMealChecklistItem, { isLoading: isChecklistSaving }] = useToggleMealChecklistItemMutation();
   const [clearMealChecklist, { isLoading: isChecklistClearing }] = useClearMealChecklistMutation();
@@ -67,6 +68,7 @@ export function MealPlanBoard({ date, onDateChange }: { date: string; onDateChan
         {!isLoading && error ? <FailureState /> : null}
         {!isLoading && data ? (
           <div className="mx-auto flex max-w-6xl flex-col gap-4">
+            <OptionalSourceNotice source={data.source} onRetry={() => void refetch()} />
             <section className="rounded-[2rem] border border-chart-2/20 bg-[linear-gradient(135deg,rgba(127,225,179,0.18),rgba(255,255,255,0.02),rgba(244,187,68,0.12))] p-5 shadow-[0_0_60px_rgba(127,225,179,0.12)]">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -117,7 +119,7 @@ export function MealPlanBoard({ date, onDateChange }: { date: string; onDateChan
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {isFetching ? "Refreshing live..." : `Plan source: ${data.source} • Updated ${new Date(data.planUpdatedAt || data.generatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`}
+                    {isFetching ? "Refreshing live..." : `Plan source: ${data.planSource || data.source.state} • Updated ${new Date(data.planUpdatedAt || data.generatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`}
                   </p>
                 </CardContent>
               </Card>

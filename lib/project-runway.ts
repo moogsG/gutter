@@ -1,12 +1,17 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { getDb } from "@/lib/db";
+import { getOpenClawWorkspacePath } from "@/lib/paths";
 import type {
+  OptionalSourceState,
   ProjectRunwayData,
   ProjectRunwayDocProject,
   ProjectRunwayTask,
 } from "@/types";
 
-const PROJECTS_DOC_PATH = "/Users/moogs/.openclaw/workspace/PROJECTS.md";
+const WORKSPACE_PATH = getOpenClawWorkspacePath();
+const PROJECTS_DOC_PATH = join(WORKSPACE_PATH, "PROJECTS.md");
 
 type TaskRow = {
   id: string;
@@ -147,8 +152,27 @@ function normalizeTask(row: TaskRow, requestedDate: string): ProjectRunwayTask {
 }
 
 export async function buildProjectRunway(requestedDate: string): Promise<ProjectRunwayData> {
-  const markdown = await readFile(PROJECTS_DOC_PATH, "utf8");
-  const document = parseProjectsDoc(markdown, requestedDate);
+  let source: OptionalSourceState;
+  let document: ReturnType<typeof parseProjectsDoc>;
+  try {
+    const markdown = await readFile(PROJECTS_DOC_PATH, "utf8");
+    document = parseProjectsDoc(markdown, requestedDate);
+    source = {
+      state: document.projects.length > 0 ? "ready" : "empty",
+      message: document.projects.length > 0 ? "Project document loaded." : "PROJECTS.md has no active projects.",
+      recovery: null,
+    };
+  } catch {
+    const notConfigured = !existsSync(WORKSPACE_PATH);
+    document = { lastUpdated: null, staleDays: null, projects: [] };
+    source = {
+      state: notConfigured ? "not-configured" : "unavailable",
+      message: notConfigured
+        ? "Set OPENCLAW_WORKSPACE_PATH to load PROJECTS.md."
+        : "PROJECTS.md is unavailable. Check the workspace and retry.",
+      recovery: notConfigured ? "configure" : "retry",
+    };
+  }
   const db = getDb();
 
   const inProgressRows = db.prepare(`
@@ -206,6 +230,7 @@ export async function buildProjectRunway(requestedDate: string): Promise<Project
           : "The doc is quiet and the task pile is cleaner than expected. Update the written plan before it rots again.";
 
   return {
+    source,
     requestedDate,
     generatedAt: new Date().toISOString(),
     headline,

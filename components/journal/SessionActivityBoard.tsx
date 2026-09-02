@@ -2,6 +2,7 @@
 
 import { Activity, AlertTriangle, Bot, Clock3, Gauge, ScrollText, TimerReset } from "lucide-react";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,7 +42,7 @@ function SessionSkeleton() {
 }
 
 export function SessionActivityBoard({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {
-  const { data, isLoading, error } = useGetSessionActivityBoardQuery(date);
+  const { data, isLoading, error, refetch } = useGetSessionActivityBoardQuery(date);
 
   return (
     <div className="flex h-full flex-col overflow-auto">
@@ -65,6 +66,8 @@ export function SessionActivityBoard({ date, onDateChange }: { date: string; onD
         ) : null}
         {!isLoading && data ? (
           <div className="mx-auto flex max-w-6xl flex-col gap-4">
+            <OptionalSourceNotice source={data.sources.transcripts} onRetry={() => void refetch()} />
+            <OptionalSourceNotice source={data.sources.memory} onRetry={() => void refetch()} />
             <section className="rounded-[2rem] border border-primary/20 bg-[linear-gradient(135deg,rgba(255,61,154,0.16),rgba(255,255,255,0.02),rgba(125,211,252,0.12))] p-5 shadow-[0_0_60px_rgba(255,61,154,0.08)]">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>

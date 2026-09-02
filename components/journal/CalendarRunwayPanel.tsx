@@ -4,6 +4,7 @@ import { AlertTriangle, CalendarClock, CalendarRange, Layers3, Sparkles } from "
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { getCalendarColorToken } from "@/lib/calendar-colors";
 import { cn } from "@/lib/utils";
 import { useGetCalendarRunwayQuery } from "@/store/api/tasksApi";
@@ -40,7 +41,7 @@ function RunwaySkeleton() {
 }
 
 export function CalendarRunwayPanel({ date }: { date: string }) {
-  const { data, isLoading, error } = useGetCalendarRunwayQuery({ date });
+  const { data, isLoading, error, refetch } = useGetCalendarRunwayQuery({ date });
 
   if (isLoading) return <RunwaySkeleton />;
 
@@ -53,6 +54,14 @@ export function CalendarRunwayPanel({ date }: { date: string }) {
             Calendar runway failed to load. The schedule board tripped over its own ankles.
           </CardContent>
         </Card>
+      </section>
+    );
+  }
+
+  if (data.source.state === "not-configured" || data.source.state === "unavailable") {
+    return (
+      <section className="border-b border-border/50 px-3 py-3 sm:px-6 sm:py-4">
+        <OptionalSourceNotice source={data.source} onRetry={() => void refetch()} />
       </section>
     );
   }

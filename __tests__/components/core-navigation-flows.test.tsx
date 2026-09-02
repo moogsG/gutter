@@ -95,6 +95,41 @@ describe("core navigation flows", () => {
 		expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/api/meeting-prep"))).toHaveLength(1);
 	});
 
+	it("shows actionable Calendar and meeting-prep source degradation on the day page", async () => {
+		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+			const url = String(input);
+			return {
+				ok: true,
+				json: async () => url.includes("calendar")
+					? {
+						events: [],
+						source: {
+							state: "not-configured",
+							message: "Calendar is disabled. Enable it to load meetings.",
+							recovery: "configure",
+						},
+					}
+					: {
+						meetings: [],
+						source: {
+							state: "unavailable",
+							message: "Meeting prep could not refresh Calendar data. Retry.",
+							recovery: "retry",
+						},
+					},
+			} as Response;
+		});
+		vi.stubGlobal("fetch", fetchMock);
+		const { default: DayDetailPage } = await import("@/app/day/[date]/page");
+
+		render(<DayDetailPage />);
+
+		expect(await screen.findByText("Calendar is disabled. Enable it to load meetings.")).toBeInTheDocument();
+		expect(screen.getByText("Meeting prep could not refresh Calendar data. Retry.")).toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+	});
+
 	it("navigates date selections directly to the authoritative day URL", async () => {
 		const dispatchEvent = vi.spyOn(window, "dispatchEvent");
 		const { OmniBar } = await import("@/components/journal/OmniBar");

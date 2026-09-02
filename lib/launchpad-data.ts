@@ -1,5 +1,5 @@
+import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { getChoreBoardData } from "@/lib/chores";
 import { getDateNightData } from "@/lib/date-night";
@@ -7,9 +7,10 @@ import { getDb } from "@/lib/db";
 import { getJournalDate, JOURNAL_TIME_ZONE, shiftJournalDate } from "@/lib/journal-date";
 import { getMealPlanData } from "@/lib/meal-plan";
 import { fetchCalendarEvents } from "@/lib/calendar";
-import type { TomorrowLaunchpadData, TomorrowLaunchpadMeeting } from "@/types";
+import { getOpenClawWorkspacePath } from "@/lib/paths";
+import type { OptionalSourceState, TomorrowLaunchpadData, TomorrowLaunchpadMeeting } from "@/types";
 
-const WORKSPACE_ROOT = join(homedir(), ".openclaw", "workspace");
+const WORKSPACE_ROOT = getOpenClawWorkspacePath();
 
 export function getDefaultTodayDate(): string {
   return getJournalDate();
@@ -58,25 +59,46 @@ export function findSectionLines(markdown: string, heading: string): string[] {
   return collected;
 }
 
-async function readLatestReport(dirName: string): Promise<string | null> {
-  const dir = join(WORKSPACE_ROOT, dirName, "reports");
-  const files = (await readdir(dir)).filter((file) => file.endsWith(".md")).sort();
-  const latest = files.at(-1);
-  if (!latest) return null;
-  return readFile(join(dir, latest), "utf8");
+type WorkspaceReportResult = {
+  markdown: string | null;
+  state: "ready" | "empty" | "unavailable";
+};
+
+function isMissingPath(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
-export async function getFamilyData(requestedDate: string): Promise<TomorrowLaunchpadData["family"]> {
-  const familyReportPromise = readLatestReport("family-ops");
+export async function readLatestWorkspaceReport(dirName: string): Promise<WorkspaceReportResult> {
+  try {
+    const dir = join(WORKSPACE_ROOT, dirName, "reports");
+    const files = (await readdir(dir)).filter((file) => file.endsWith(".md")).sort();
+    const latest = files.at(-1);
+    if (!latest) return { markdown: null, state: "empty" };
+    return { markdown: await readFile(join(dir, latest), "utf8"), state: "ready" };
+  } catch (error) {
+    return {
+      markdown: null,
+      state: isMissingPath(error) ? "empty" : "unavailable",
+    };
+  }
+}
+
+export async function getFamilyData(requestedDate: string): Promise<{
+  data: TomorrowLaunchpadData["family"];
+  source: OptionalSourceState;
+}> {
+  const familyReportPromise = readLatestWorkspaceReport("family-ops");
   const mealPlanPromise = getMealPlanData(requestedDate).catch(() => null);
   const dateNightPromise = getDateNightData(requestedDate).catch(() => null);
-  const familyReport = await familyReportPromise;
+  const familyReportResult = await familyReportPromise;
+  const familyReport = familyReportResult.markdown;
 
   let choreBoard: ReturnType<typeof getChoreBoardData> | null = null;
+  let choreBoardUnavailable = false;
   try {
     choreBoard = getChoreBoardData();
   } catch {
-    choreBoard = null;
+    choreBoardUnavailable = true;
   }
 
   const [mealPlan, dateNight] = await Promise.all([mealPlanPromise, dateNightPromise]);
@@ -93,7 +115,7 @@ export async function getFamilyData(requestedDate: string): Promise<TomorrowLaun
         .trim() || null
     : null;
 
-  return {
+  const data: TomorrowLaunchpadData["family"] = {
     dinner: mealPlan?.highlight
       ? {
           day: mealPlan.highlight.day,
@@ -104,7 +126,7 @@ export async function getFamilyData(requestedDate: string): Promise<TomorrowLaun
       : null,
     mealPlan: {
       displayRange: mealPlan?.displayRange || null,
-      source: mealPlan?.source || "missing",
+      source: mealPlan?.planSource || "missing",
       updatedAt: mealPlan?.planUpdatedAt || null,
     },
     grocery: {
@@ -126,11 +148,63 @@ export async function getFamilyData(requestedDate: string): Promise<TomorrowLaun
     },
     nextMove: dateNight?.partner.nextMoves[0] || choreBoard?.nextMove || reportNextMove,
   };
+
+  const unavailable =
+    familyReportResult.state === "unavailable" ||
+    !mealPlan ||
+    mealPlan.source.state === "unavailable" ||
+    !dateNight ||
+    dateNight.sources.workspace.state === "unavailable" ||
+    choreBoardUnavailable;
+  const notConfigured =
+    mealPlan?.source.state === "not-configured" ||
+    dateNight?.sources.workspace.state === "not-configured" ||
+    choreBoard?.source.state === "not-configured";
+  const hasData = Boolean(
+    familyReportResult.state === "ready" ||
+    mealPlan?.source.state === "ready" ||
+    dateNight?.sources.workspace.state === "ready" ||
+    choreBoard?.source.state === "ready" ||
+    data.dinner ||
+    data.grocery.itemCount > 0 ||
+    data.relationship.headline ||
+    data.relationship.nextMove ||
+    data.chores.remaining !== null ||
+    data.chores.suggestedChoices.length > 0,
+  );
+  const source: OptionalSourceState = !existsSync(WORKSPACE_ROOT)
+    ? {
+        state: "not-configured",
+        message: "Set OPENCLAW_WORKSPACE_PATH to load family planning data.",
+        recovery: "configure",
+      }
+    : unavailable
+      ? {
+          state: "unavailable",
+          message: "Family planning data is unavailable. Check OPENCLAW_WORKSPACE_PATH and retry.",
+          recovery: "retry",
+        }
+      : notConfigured
+        ? {
+            state: "not-configured",
+            message: "Family planning is partially configured. Add meal-planner to OPENCLAW_WORKSPACE_PATH to load meals.",
+            recovery: "configure",
+          }
+      : {
+          state: hasData ? "ready" : "empty",
+          message: hasData ? "Family planning data loaded." : "No family planning data was found.",
+          recovery: null,
+        };
+
+  return { data, source };
 }
 
-export async function getMeetings(requestedDate: string): Promise<TomorrowLaunchpadMeeting[]> {
+export async function getMeetings(requestedDate: string): Promise<{
+  meetings: TomorrowLaunchpadMeeting[];
+  source: OptionalSourceState;
+}> {
   const calendarResult = await fetchCalendarEvents(requestedDate, requestedDate);
-  if (!calendarResult.ok) return [];
+  if (!calendarResult.ok) return { meetings: [], source: calendarResult.source };
 
   const db = getDb();
   const rows = db
@@ -141,7 +215,7 @@ export async function getMeetings(requestedDate: string): Promise<TomorrowLaunch
     rows.map((row) => [`${row.event_id}::${row.occurrence_date}`, row.prep_status]),
   );
 
-  return (calendarResult.data || [])
+  const meetings = (calendarResult.data || [])
     .filter((event) => !event.allDay)
     .sort((left, right) => new Date(left.startDate).getTime() - new Date(right.startDate).getTime())
     .map((event) => ({
@@ -153,4 +227,6 @@ export async function getMeetings(requestedDate: string): Promise<TomorrowLaunch
       location: event.location,
       prepStatus: prepByKey.get(`${event.id}::${requestedDate}`) || "none",
     }));
+
+  return { meetings, source: calendarResult.source };
 }

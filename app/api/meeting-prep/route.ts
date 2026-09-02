@@ -1,17 +1,8 @@
-import { exec } from "node:child_process";
-import { randomBytes } from "node:crypto";
-import { readFile, unlink } from "node:fs/promises";
 import type { NextRequest } from "next/server";
-import { promisify } from "node:util";
+import { fetchCalendarEvents } from "@/lib/calendar";
 import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { getJournalDate } from "@/lib/journal-date";
-
-const execAsync = promisify(exec);
-
-import { getCalendarNames } from "@/lib/calendars";
-
-const CALENDARS = getCalendarNames();
 
 function formatDate(date: Date): string {
 	return getJournalDate(date);
@@ -34,36 +25,12 @@ export async function GET(req: NextRequest) {
 		const fromStr = formatDate(now);
 		const toStr = formatDate(futureDate);
 
-		// Fetch calendar events (accli pipe bug workaround: redirect to file)
-		const allEventsPromises = CALENDARS.map(async (calendarName) => {
-			const tmpFile = `/tmp/accli-${randomBytes(4).toString("hex")}.json`;
-			try {
-				await execAsync(
-					`npx @joargp/accli events "${calendarName}" --from "${fromStr}" --to "${toStr}" --max 50 --json > "${tmpFile}"`,
-					{ maxBuffer: 5 * 1024 * 1024, shell: "/bin/sh" },
-				);
-				const raw = await readFile(tmpFile, "utf-8");
-				const data = JSON.parse(raw);
-				return (data.events || []).map((e: any) => ({
-					...e,
-					calendarSource: calendarName,
-				}));
-			} catch (err) {
-				console.error(`Failed to fetch ${calendarName}:`, err);
-				return [];
-			} finally {
-				try {
-					await unlink(tmpFile);
-				} catch {}
-			}
-		});
-
-		const allEventsArrays = await Promise.all(allEventsPromises);
-		const allEvents = allEventsArrays.flat().filter((e: any) => !e.allDay);
+		const calendarResult = await fetchCalendarEvents(fromStr, toStr);
+		const allEvents = (calendarResult.data || []).filter((event) => !event.allDay);
 
 		// Deduplicate by event ID
 		const seenIds = new Set<string>();
-		const uniqueEvents = allEvents.filter((event: any) => {
+		const uniqueEvents = allEvents.filter((event) => {
 			if (seenIds.has(event.id)) return false;
 			seenIds.add(event.id);
 			return true;
@@ -85,8 +52,8 @@ export async function GET(req: NextRequest) {
 		// Merge calendar events with prep data
 		// ONLY match by event_id + occurrence_date — never fall back to event_id alone
 		// Recurring meetings share the same event_id, so matching without date shows prep on every occurrence
-		const meetings = uniqueEvents.map((event: any, index: number) => {
-			const eventDate = event.startISO ? event.startISO.split("T")[0] : "";
+		const meetings = uniqueEvents.map((event, index: number) => {
+			const eventDate = event.startDate ? event.startDate.split("T")[0] : "";
 			const prep = prepByKey.get(`${event.id}::${eventDate}`);
 			let actionItems: string[] | null = null;
 			if (prep?.action_items) {
@@ -99,8 +66,8 @@ export async function GET(req: NextRequest) {
 				id: prep?.id || `cal:${event.id}:${index}`,
 				eventId: event.id,
 				title: event.summary,
-				time: event.startISO,
-				calendar: event.calendar || event.calendarSource,
+				time: event.startDate,
+				calendar: event.calendar,
 				occurrenceDate: eventDate,
 				prepNotes: prep?.prep_notes || null,
 				prepStatus: prep?.prep_status || "none",
@@ -156,7 +123,7 @@ export async function GET(req: NextRequest) {
 				new Date(a.time).getTime() - new Date(b.time).getTime(),
 		);
 
-		return Response.json({ meetings });
+		return Response.json({ meetings, source: calendarResult.source });
 	} catch (error) {
 		console.error("Meeting prep fetch error:", error);
 		return Response.json(

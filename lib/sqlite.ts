@@ -45,7 +45,7 @@ export class Database {
 			const stmt = this._db.prepare(sql);
 			return {
 				run: (...params: any[]) => stmt.run(...params),
-				get: (...params: any[]) => stmt.get(...params),
+				get: (...params: any[]) => stmt.get(...params) ?? undefined,
 				all: (...params: any[]) => stmt.all(...params),
 			};
 		}
@@ -60,7 +60,7 @@ export class Database {
 	pragma(pragma: string): any {
 		if (isBun) {
 			try {
-				return this._db.run(`PRAGMA ${pragma}`);
+				return this._db.query(`PRAGMA ${pragma}`).all();
 			} catch {
 				// Some pragmas are not settable, ignore
 			}

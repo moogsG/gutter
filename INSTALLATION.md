@@ -129,7 +129,7 @@ Set `WHISPER_MODEL_PATH=~/.cache/whisper/ggml-base.en.bin` in `.env`.
 ### 7. Grant Calendar permissions (macOS only)
 
 ```bash
-npx @joargp/accli calendars list
+npx @joargp/accli calendars
 ```
 
 This will prompt for Calendar access. Grant it in **System Settings → Privacy & Security → Calendars**.
@@ -218,7 +218,7 @@ ollama serve
 ```bash
 # Reset accli permissions
 tccutil reset Calendar
-npx @joargp/accli calendars list
+npx @joargp/accli calendars
 ```
 
 Grant access when prompted.

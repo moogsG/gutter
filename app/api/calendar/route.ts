@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
 		const result = await fetchCalendarEvents(fromStr, toStr);
 		if (!result.ok) {
-			throw new Error(result.error || "Failed to fetch calendar events");
+			return Response.json({ events: [], source: result.source });
 		}
 
 		let upcoming = (result.data || [])
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
 			upcoming = upcoming.filter((e: any) => !e.allDay).slice(0, 5);
 		}
 
-		return Response.json({ events: upcoming });
+		return Response.json({ events: upcoming, source: result.source });
 	} catch (error) {
 		console.error("Calendar fetch error:", error);
 		return Response.json(

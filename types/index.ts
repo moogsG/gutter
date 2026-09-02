@@ -94,6 +94,7 @@ export interface CalendarRunwayDay {
 }
 
 export interface CalendarRunwayData {
+  source: OptionalSourceState;
   requestedDate: string;
   rangeEndDate: string;
   displayRange: string;
@@ -221,6 +222,10 @@ export interface SessionActivityDay {
 }
 
 export interface SessionActivityBoardData {
+  sources: {
+    transcripts: OptionalSourceState;
+    memory: OptionalSourceState;
+  };
   requestedDate: string;
   displayDate: string;
   generatedAt: string;
@@ -270,6 +275,7 @@ export interface ProjectRunwayTask {
 }
 
 export interface ProjectRunwayData {
+  source: OptionalSourceState;
   requestedDate: string;
   generatedAt: string;
   headline: string;
@@ -352,6 +358,7 @@ export interface LinkedInAnalyticsPost {
 }
 
 export interface LinkedInBoardData {
+  source: OptionalSourceState;
   requestedDate: string;
   generatedAt: string;
   headline: string;
@@ -389,6 +396,11 @@ export interface MeetingPrep {
   actionItems: string[] | null;
 }
 
+export interface MeetingPrepData {
+  meetings: MeetingPrep[];
+  source: OptionalSourceState;
+}
+
 export interface MeetingPrepQueueItem {
   id: string;
   eventId: string;
@@ -408,6 +420,7 @@ export interface MeetingPrepQueueItem {
 }
 
 export interface MeetingPrepQueueData {
+  source: OptionalSourceState;
   requestedDate: string;
   rangeEndDate: string;
   displayRange: string;
@@ -446,6 +459,11 @@ export interface TomorrowLaunchpadMeeting {
 }
 
 export interface TomorrowLaunchpadData {
+  sources: {
+    focus: OptionalSourceState;
+    calendar: OptionalSourceState;
+    family: OptionalSourceState;
+  };
   requestedDate: string;
   displayDate: string;
   generatedAt: string;
@@ -540,7 +558,14 @@ export interface ChoreBoardHistoryEntry {
   completedAt: string;
 }
 
+export type OptionalSourceState = {
+  state: "ready" | "empty" | "not-configured" | "unavailable";
+  message: string;
+  recovery: "configure" | "retry" | null;
+};
+
 export interface ChoreBoardData {
+  source: OptionalSourceState;
   generatedAt: string;
   cycleNumber: number;
   cycleStartedAt: string;
@@ -640,6 +665,7 @@ export interface FollowThroughTask {
 }
 
 export interface FollowThroughRadarData {
+  source: OptionalSourceState;
   requestedDate: string;
   generatedAt: string;
   nextMove: string;
@@ -732,7 +758,8 @@ export interface MealPlanData {
   displayRange: string;
   generatedAt: string;
   planUpdatedAt: string | null;
-  source: "saved" | "generated";
+  source: OptionalSourceState;
+  planSource: "saved" | "generated" | null;
   highlight: MealPlanMeal | null;
   meals: MealPlanMeal[];
   grocerySections: MealPlanGrocerySection[];
@@ -783,6 +810,10 @@ export interface ProjectTruthLiveTask {
 }
 
 export interface ProjectTruthData {
+  sources: {
+    projectDocument: OptionalSourceState;
+    dailyMemory: OptionalSourceState;
+  };
   requestedDate: string;
   generatedAt: string;
   nextMove: string;
@@ -824,6 +855,10 @@ export interface EveningResetMeeting {
 }
 
 export interface EveningResetData {
+  sources: {
+    calendar: OptionalSourceState;
+    family: OptionalSourceState;
+  };
   requestedDate: string;
   tomorrowDate: string;
   displayDate: string;
@@ -1029,6 +1064,10 @@ export interface DateNightData {
   status: "drifting" | "locked-in" | "scheduled";
   headline: string;
   warnings: string[];
+  sources: {
+    calendar: OptionalSourceState;
+    workspace: OptionalSourceState;
+  };
   nextEvent: DateNightEvent | null;
   counts: {
     upcomingEvents: number;

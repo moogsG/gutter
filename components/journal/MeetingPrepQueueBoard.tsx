@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, ArrowUpRight, CalendarDays, CheckCircle2, Clock3, Eye, FileCheck2, Loader2, NotebookTabs, Sparkles } from "lucide-react";
 import { MeetingDrawer } from "@/components/meeting/MeetingDrawer";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -111,7 +112,7 @@ function QueueSection({
 }
 
 export function MeetingPrepQueueBoard({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {
-  const { data, isLoading, error, isFetching } = useGetMeetingPrepQueueQuery(date);
+  const { data, isLoading, error, isFetching, refetch } = useGetMeetingPrepQueueQuery(date);
   const [requestPrep] = useRequestPrepMutation();
   const [activeMeeting, setActiveMeeting] = useState<MeetingPrepQueueItem | null>(null);
   const [preppingId, setPreppingId] = useState<string | null>(null);
@@ -162,6 +163,7 @@ export function MeetingPrepQueueBoard({ date, onDateChange }: { date: string; on
         {!isLoading && error ? <FailureState /> : null}
         {!isLoading && data ? (
           <div className="mx-auto flex max-w-6xl flex-col gap-4">
+            <OptionalSourceNotice source={data.source} onRetry={() => void refetch()} />
             <section className="rounded-[2rem] border border-primary/20 bg-[linear-gradient(135deg,rgba(255,61,154,0.16),rgba(255,255,255,0.02),rgba(56,189,248,0.08))] p-5 shadow-[0_0_60px_rgba(255,61,154,0.08)]">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>

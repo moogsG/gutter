@@ -1,11 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import { type NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 import { fetchCalendarEvents, calendarCache, CALENDAR_ENABLED } from "@/lib/calendar";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { getOpenClawWorkspacePath } from "@/lib/paths";
 import type {
   StatusBoardData,
   StatusCheck,
@@ -14,7 +14,7 @@ import type {
   StatusServiceProbe,
 } from "@/types";
 
-const WORKSPACE_ROOT = join(homedir(), ".openclaw", "workspace");
+const WORKSPACE_ROOT = getOpenClawWorkspacePath();
 const MEMORY_DIR = join(WORKSPACE_ROOT, "memory");
 const NIGHTLY_STATE_PATH = join(MEMORY_DIR, "nightly-initiative-state.json");
 const SERVICE_HEALTH_LOG_PATH = join(MEMORY_DIR, "service-health.jsonl");
@@ -123,7 +123,7 @@ async function measureProbe<T>(
   const startedAt = performance.now();
 
   try {
-    const timeout = new Promise<never>((_, reject) => {
+    const timeout = new Promise<T>((_, reject) => {
       setTimeout(() => reject(new Error(`Probe exceeded ${downMs}ms timeout`)), downMs);
     });
 
@@ -194,7 +194,15 @@ async function probeCalendarBridge(requestedDate: string): Promise<{
 
   if (!result.ok) {
     return {
-      result: { ok: false as const, error: result.error },
+      result: {
+        ok: false as const,
+        error: result.error,
+        source: {
+          state: "unavailable",
+          message: "Calendar probe timed out. Retry the connection.",
+          recovery: "retry",
+        },
+      },
       probe: {
         service: "calendar" as const,
         label: "Live calendar probe",

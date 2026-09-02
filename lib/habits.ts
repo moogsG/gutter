@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { getDb } from "@/lib/db";
 import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
+import { getOpenClawWorkspacePath } from "@/lib/paths";
 import type {
   HabitsLegacySnapshotItem,
   HabitsMomentumData,
@@ -10,7 +11,7 @@ import type {
 } from "@/types";
 
 const WINDOW_DAYS = 14;
-const WORKSPACE_ROOT = resolve(process.cwd(), "..", "..", ".openclaw", "workspace");
+const WORKSPACE_ROOT = getOpenClawWorkspacePath();
 const TRACKER_PATH = resolve(WORKSPACE_ROOT, "memory", "habit-tracker.json");
 const MEMORY_DIR = resolve(WORKSPACE_ROOT, "memory");
 

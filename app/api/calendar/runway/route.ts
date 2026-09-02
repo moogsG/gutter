@@ -46,17 +46,18 @@ export async function GET(request: NextRequest) {
   const result = await fetchCalendarEvents(requestedDate, rangeEndDate);
 
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error || "Failed to load calendar runway" },
-      { status: 500 },
-    );
+    return NextResponse.json({
+      ...buildCalendarRunway(requestedDate, [], []),
+      source: result.source,
+    });
   }
 
-  return NextResponse.json(
-    buildCalendarRunway(
+  return NextResponse.json({
+    ...buildCalendarRunway(
       requestedDate,
       normalizeEvents(result.data),
       parseFailedCalendars(calendarCache.lastError),
     ),
-  );
+    source: result.source,
+  });
 }

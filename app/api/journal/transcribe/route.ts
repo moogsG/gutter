@@ -4,20 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type NextRequest, NextResponse } from "next/server";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { getExecutable, getWhisperModelPath } from "@/lib/paths";
 
-const WHISPER_MODEL = join(
-	process.env.HOME || "/Users/moogs",
-	".cache/whisper/ggml-base.en.bin",
-);
-
-// Use absolute paths for binaries so they work regardless of the process PATH
-// (LaunchAgent environments often have a restricted PATH that excludes /opt/homebrew/bin)
-const FFMPEG_BIN = existsSync("/opt/homebrew/bin/ffmpeg")
-	? "/opt/homebrew/bin/ffmpeg"
-	: "ffmpeg";
-const WHISPER_BIN = existsSync("/opt/homebrew/bin/whisper-cli")
-	? "/opt/homebrew/bin/whisper-cli"
-	: "whisper-cli";
+const WHISPER_MODEL = getWhisperModelPath();
+const FFMPEG_BIN = getExecutable("FFMPEG_BIN", "ffmpeg");
+const WHISPER_BIN = getExecutable("WHISPER_BIN", "whisper-cli");
 
 export async function POST(req: NextRequest) {
 	// Rate limit: 10 requests per minute (CPU-intensive transcription)

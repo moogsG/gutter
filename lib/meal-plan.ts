@@ -1,4 +1,5 @@
 import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { join } from "node:path";
@@ -6,13 +7,14 @@ import { pathToFileURL } from "node:url";
 import type { MealPlanData, MealPlanGrocerySection, MealPlanMeal } from "@/types";
 import { getMealChecklist } from "@/lib/meal-plan-checklist";
 import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
+import { getExecutable, getOpenClawWorkspacePath } from "@/lib/paths";
 
 const execFileAsync = promisify(execFile);
-const WORKSPACE_ROOT = join(process.env.HOME || "/Users/moogs", ".openclaw", "workspace");
+const WORKSPACE_ROOT = getOpenClawWorkspacePath();
 const MEAL_PLANNER_ROOT = join(WORKSPACE_ROOT, "meal-planner");
 const PLANS_DIR = join(MEAL_PLANNER_ROOT, "plans");
 const MEAL_GENERATOR_PATH = join(MEAL_PLANNER_ROOT, "src", "meal-generator.ts");
-const BUN_BIN = process.env.BUN_BIN || "/opt/homebrew/bin/bun";
+const BUN_BIN = getExecutable("BUN_BIN", "bun");
 
 interface StoredWeeklyPlan {
   week_of: string;
@@ -138,7 +140,7 @@ async function generatePlanForDate(requestedDate: string) {
 
   await execFileAsync(BUN_BIN, ["--eval", script], {
     cwd: MEAL_PLANNER_ROOT,
-    env: { ...process.env, HOME: process.env.HOME || "/Users/moogs" },
+    env: process.env,
   });
 }
 
@@ -169,7 +171,56 @@ export async function getMealPlanData(requestedDate: string, options?: { forceRe
   }
 
   const weekOf = getWeekStart(new Date(`${requestedDate}T12:00:00`));
-  const { plan, updatedAt, grocerySections, source } = await ensurePlanArtifacts(requestedDate, weekOf, options?.forceRegenerate);
+  if (!existsSync(MEAL_PLANNER_ROOT)) {
+    return {
+      requestedDate,
+      weekOf,
+      displayRange: formatRange(weekOf),
+      generatedAt: new Date().toISOString(),
+      planUpdatedAt: null,
+      source: {
+        state: "not-configured",
+        message: "Meals needs the optional meal-planner workspace.",
+        recovery: "configure",
+      },
+      planSource: null,
+      highlight: null,
+      meals: [],
+      grocerySections: [],
+      groceryItemCount: 0,
+      groceryChecklist: [],
+      groceryCheckedCount: 0,
+      groceryRemainingCount: 0,
+    };
+  }
+
+  let artifacts: Awaited<ReturnType<typeof ensurePlanArtifacts>>;
+  try {
+    artifacts = await ensurePlanArtifacts(requestedDate, weekOf, options?.forceRegenerate);
+  } catch {
+    return {
+      requestedDate,
+      weekOf,
+      displayRange: formatRange(weekOf),
+      generatedAt: new Date().toISOString(),
+      planUpdatedAt: null,
+      source: {
+        state: "unavailable",
+        message: "The meal planner is configured but unavailable. Check its files and retry.",
+        recovery: "retry",
+      },
+      planSource: null,
+      highlight: null,
+      meals: [],
+      grocerySections: [],
+      groceryItemCount: 0,
+      groceryChecklist: [],
+      groceryCheckedCount: 0,
+      groceryRemainingCount: 0,
+    };
+  }
+
+  const { plan, updatedAt, grocerySections, source } = artifacts;
   const meals = plan.meals.map(({ day, meal }) => toMeal(day, meal));
   const highlightDay = new Date(`${requestedDate}T12:00:00`).toLocaleDateString("en-US", { weekday: "long" });
   const highlight = meals.find((meal) => meal.day === highlightDay) || meals[0] || null;
@@ -181,7 +232,12 @@ export async function getMealPlanData(requestedDate: string, options?: { forceRe
     displayRange: formatRange(plan.week_of),
     generatedAt: new Date().toISOString(),
     planUpdatedAt: updatedAt,
-    source,
+    source: {
+      state: meals.length > 0 ? "ready" : "empty",
+      message: meals.length > 0 ? "Meal plan loaded." : "The meal plan contains no meals.",
+      recovery: null,
+    },
+    planSource: source,
     highlight,
     meals,
     grocerySections,

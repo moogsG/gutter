@@ -1,12 +1,16 @@
+import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { type NextRequest, NextResponse } from "next/server";
 import { handleApiError } from "@/lib/api-error-handler";
 import { getDb } from "@/lib/db";
 import { getJournalDate } from "@/lib/journal-date";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
-import type { FollowThroughRadarData, FollowThroughPromise, FollowThroughTask } from "@/types";
+import { getOpenClawWorkspacePath } from "@/lib/paths";
+import type { FollowThroughRadarData, FollowThroughPromise, FollowThroughTask, OptionalSourceState } from "@/types";
 
-const PROMISES_PATH = "/Users/moogs/.openclaw/workspace/memory/promises.json";
+const WORKSPACE_PATH = getOpenClawWorkspacePath();
+const PROMISES_PATH = join(WORKSPACE_PATH, "memory", "promises.json");
 
 type TaskRow = {
   id: string;
@@ -60,11 +64,14 @@ function normalizeTask(row: TaskRow, requestedDate: string): FollowThroughTask {
   };
 }
 
-async function loadPromises(requestedDate: string): Promise<FollowThroughPromise[]> {
+async function loadPromises(requestedDate: string): Promise<{
+  promises: FollowThroughPromise[];
+  source: OptionalSourceState;
+}> {
   try {
-    const promises = await readPromiseRecords();
+    const records = await readPromiseRecords();
 
-    return promises
+    const promises = records
       .filter((promise) => promise.status === "pending" && typeof promise.text === "string")
       .map((promise) => {
         const deadline = typeof promise.deadline === "string" ? promise.deadline : null;
@@ -87,8 +94,26 @@ async function loadPromises(requestedDate: string): Promise<FollowThroughPromise
         };
       })
       .sort((a, b) => b.staleDays - a.staleDays);
+    return {
+      promises,
+      source: {
+        state: records.length > 0 ? "ready" : "empty",
+        message: records.length > 0 ? "Tracked promises loaded." : "No tracked promises were found.",
+        recovery: null,
+      },
+    };
   } catch {
-    return [];
+    const notConfigured = !existsSync(WORKSPACE_PATH);
+    return {
+      promises: [],
+      source: {
+        state: notConfigured ? "not-configured" : "unavailable",
+        message: notConfigured
+          ? "Set OPENCLAW_WORKSPACE_PATH to load tracked promises."
+          : "Tracked promises are unavailable. Check the workspace and retry.",
+        recovery: notConfigured ? "configure" : "retry",
+      },
+    };
   }
 }
 
@@ -142,7 +167,8 @@ export async function GET(req: NextRequest) {
       LIMIT 12
     `).all(requestedDate) as TaskRow[];
 
-    const promises = await loadPromises(requestedDate);
+    const promiseResult = await loadPromises(requestedDate);
+    const promises = promiseResult.promises;
     const stuck = stuckRows.map((row) => normalizeTask(row, requestedDate));
     const carryover = carryoverRows.map((row) => normalizeTask(row, requestedDate));
 
@@ -161,6 +187,7 @@ export async function GET(req: NextRequest) {
             : "Nothing major is rotting here. Miracles happen.";
 
     const response: FollowThroughRadarData = {
+      source: promiseResult.source,
       requestedDate,
       generatedAt: new Date().toISOString(),
       nextMove,

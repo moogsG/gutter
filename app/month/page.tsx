@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, FileText, Mic } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarRunwayPanel } from "@/components/journal/CalendarRunwayPanel";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { MeetingDrawer } from "@/components/meeting/MeetingDrawer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -295,7 +296,7 @@ export default function MonthlyLogPage() {
 	});
 	const calendarEvents = calendarData?.events || [];
 
-	const { data: meetingPrepData } = useGetMeetingPrepQuery();
+	const { data: meetingPrepData, refetch: refetchMeetingPrep } = useGetMeetingPrepQuery();
 
 	const weeks = useMemo(
 		() =>
@@ -414,6 +415,14 @@ export default function MonthlyLogPage() {
 				) : (
 					<div className="flex-1 flex flex-col min-h-0">
 						<CalendarRunwayPanel date={getRunwayAnchorDate(currentMonth)} />
+						{meetingPrepData?.source ? (
+							<div className="px-3 py-2 sm:px-6">
+								<OptionalSourceNotice
+									source={meetingPrepData.source}
+									onRetry={refetchMeetingPrep}
+								/>
+							</div>
+						) : null}
 
 						{/* Day labels */}
 						<div className="grid grid-cols-7 border-b border-border/50">

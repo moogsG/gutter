@@ -146,7 +146,7 @@ export function buildCalendarRunway(
   requestedDate: string,
   rawEvents: CalendarEvent[],
   failedCalendars: string[] = [],
-): CalendarRunwayData {
+): Omit<CalendarRunwayData, "source"> {
   const events = rawEvents.map(toCalendarEvent);
   const upcomingDays: CalendarRunwayDay[] = Array.from({ length: 7 }, (_, index) => {
     const date = shiftDate(requestedDate, index);

@@ -276,7 +276,7 @@ error: Calendar access denied
 
 1. Run accli to trigger permission prompt:
    ```bash
-   npx @joargp/accli calendars list
+   npx @joargp/accli calendars
    ```
 
 2. macOS will show a dialog → Click **OK**
@@ -301,7 +301,7 @@ grep CALENDARS .env
 
 **List available calendars:**
 ```bash
-npx @joargp/accli calendars list
+npx @joargp/accli calendars
 ```
 
 **Update `.env` with exact names (case-sensitive):**
@@ -326,7 +326,7 @@ CALENDAR_ENABLED=false
 **On macOS:** Check that `accli` is installed and accessible:
 ```bash
 which accli
-npx @joargp/accli calendars list
+npx @joargp/accli calendars
 ```
 
 ---

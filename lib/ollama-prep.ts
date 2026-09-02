@@ -14,6 +14,7 @@
  */
 
 import { searchMeetingContext } from "@/lib/vector-store";
+import { getOpenClawWorkspacePath } from "@/lib/paths";
 
 // ─── Vector context helper ────────────────────────────────────────────
 
@@ -224,7 +225,7 @@ async function searchMemory(query: string): Promise<string> {
 		// ONLY search daily notes (memory/YYYY-MM-DD.md) for work context.
 		// DO NOT search MEMORY.md, AGENTS.md, SOUL.md, USER.md, or any config files.
 		// Those contain personal/private info that should never appear in meeting prep.
-		const memDir = `${process.env.HOME}/.openclaw/workspace/memory`;
+		const memDir = `${getOpenClawWorkspacePath()}/memory`;
 		const keywords = query
 			.toLowerCase()
 			.split(/\s+/)

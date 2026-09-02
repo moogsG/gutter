@@ -61,7 +61,16 @@ export async function GET(request: NextRequest) {
     const calendarResult = await fetchCalendarEvents(requestedDate, rangeEndDate);
 
     if (!calendarResult.ok) {
-      return Response.json({ error: calendarResult.error || "Calendar unavailable" }, { status: 503 });
+      const payload: MeetingPrepQueueData = {
+        source: calendarResult.source,
+        requestedDate,
+        rangeEndDate,
+        displayRange: formatRange(requestedDate, rangeEndDate),
+        generatedAt: new Date().toISOString(),
+        counts: { total: 0, redZone: 0, ready: 0, later: 0, notesCaptured: 0 },
+        groups: { redZone: [], ready: [], later: [] },
+      };
+      return Response.json(payload);
     }
 
     const db = getDb();
@@ -127,6 +136,7 @@ export async function GET(request: NextRequest) {
       });
 
     const payload: MeetingPrepQueueData = {
+      source: calendarResult.source,
       requestedDate,
       rangeEndDate,
       displayRange: formatRange(requestedDate, rangeEndDate),

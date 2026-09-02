@@ -23,11 +23,8 @@ export async function GET(req: NextRequest) {
 	const result = await fetchCalendarEvents(from, to);
 
 	if (!result.ok) {
-		return NextResponse.json(
-			{ error: result.error || "Failed to fetch calendar events" },
-			{ status: 500 },
-		);
+		return NextResponse.json({ events: [], source: result.source });
 	}
 
-	return NextResponse.json(result.data || []);
+	return NextResponse.json({ events: result.data || [], source: result.source });
 }

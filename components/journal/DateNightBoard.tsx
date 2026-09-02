@@ -2,6 +2,7 @@
 
 import { AlertTriangle, CalendarHeart, Heart, Gift, Sparkles, ShieldAlert } from "lucide-react";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,7 +35,7 @@ function formatEventDate(value: string) {
 }
 
 export function DateNightBoard({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {
-  const { data, isLoading, error, isFetching } = useGetDateNightQuery(date);
+  const { data, isLoading, error, isFetching, refetch } = useGetDateNightQuery(date);
 
   return (
     <div className="flex h-full flex-col overflow-auto">
@@ -51,6 +52,8 @@ export function DateNightBoard({ date, onDateChange }: { date: string; onDateCha
         {!isLoading && error ? <FailureState /> : null}
         {!isLoading && data ? (
           <div className="mx-auto flex max-w-6xl flex-col gap-4">
+            <OptionalSourceNotice source={data.sources.calendar} onRetry={refetch} />
+            <OptionalSourceNotice source={data.sources.workspace} onRetry={refetch} />
             <section className={cn("rounded-[2rem] bg-[linear-gradient(135deg,rgba(244,114,182,0.17),rgba(255,255,255,0.02),rgba(251,191,36,0.12))] p-5 shadow-[0_0_60px_rgba(244,114,182,0.12)]", tone(data.status))}>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>

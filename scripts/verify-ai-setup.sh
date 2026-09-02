@@ -99,9 +99,9 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     check_pass "npx available (for @joargp/accli)"
     
     # Try to run accli
-    if npx @joargp/accli calendars list > /dev/null 2>&1; then
+    if npx @joargp/accli calendars > /dev/null 2>&1; then
       check_pass "accli can access Apple Calendar"
-      COUNT=$(npx @joargp/accli calendars list --json 2>/dev/null | grep -c '"name"' || echo "0")
+      COUNT=$(npx @joargp/accli calendars --json 2>/dev/null | grep -c '"name"' || echo "0")
       echo "   Found $COUNT calendar(s)"
     else
       check_warn "accli cannot access calendars (permissions may be needed)"

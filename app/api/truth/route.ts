@@ -1,14 +1,15 @@
+import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import { type NextRequest, NextResponse } from "next/server";
 import { handleApiError } from "@/lib/api-error-handler";
 import { getDb } from "@/lib/db";
 import { getJournalDate } from "@/lib/journal-date";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { getOpenClawWorkspacePath } from "@/lib/paths";
 import type { ProjectTruthData, ProjectTruthLiveTask, ProjectTruthProject, ProjectTruthRecurringTask } from "@/types";
 
-const WORKSPACE_ROOT = join(homedir(), ".openclaw", "workspace");
+const WORKSPACE_ROOT = getOpenClawWorkspacePath();
 const MEMORY_DIR = join(WORKSPACE_ROOT, "memory");
 const PROJECTS_PATH = join(WORKSPACE_ROOT, "PROJECTS.md");
 
@@ -194,10 +195,26 @@ export async function GET(req: NextRequest) {
   try {
     const requestedDate = getRequestedDate(req.nextUrl.searchParams.get("date"));
     const db = getDb();
-    const [projectDoc, recurring] = await Promise.all([
-      getProjectDoc(requestedDate),
-      getRecurringTasks(requestedDate),
+    const workspaceConfigured = existsSync(WORKSPACE_ROOT);
+    const [projectDocResult, recurringResult] = await Promise.all([
+      workspaceConfigured
+        ? getProjectDoc(requestedDate)
+            .then((data) => ({ data, error: null }))
+            .catch(() => ({ data: null, error: "unavailable" as const }))
+        : Promise.resolve({ data: null, error: "not-configured" as const }),
+      workspaceConfigured
+        ? getRecurringTasks(requestedDate)
+            .then((data) => ({ data, error: null }))
+            .catch(() => ({ data: null, error: "unavailable" as const }))
+        : Promise.resolve({ data: null, error: "not-configured" as const }),
     ]);
+    const projectDoc = projectDocResult.data || {
+      lastUpdated: null,
+      stale: true,
+      ageDays: null,
+      projects: [],
+    };
+    const recurring = recurringResult.data || { datesReviewed: 0, tasks: [] };
 
     const staleWorkCountRow = db.prepare(`
       SELECT COUNT(*) as count
@@ -236,6 +253,34 @@ export async function GET(req: NextRequest) {
     ];
 
     const payload: ProjectTruthData = {
+      sources: {
+        projectDocument: projectDocResult.error
+          ? {
+              state: projectDocResult.error,
+              message: projectDocResult.error === "not-configured"
+                ? "Set OPENCLAW_WORKSPACE_PATH to load PROJECTS.md."
+                : "PROJECTS.md is unavailable. Check the workspace and retry.",
+              recovery: projectDocResult.error === "not-configured" ? "configure" : "retry",
+            }
+          : {
+              state: projectDoc.projects.length > 0 ? "ready" : "empty",
+              message: projectDoc.projects.length > 0 ? "Project document loaded." : "PROJECTS.md has no active projects.",
+              recovery: null,
+            },
+        dailyMemory: recurringResult.error
+          ? {
+              state: recurringResult.error,
+              message: recurringResult.error === "not-configured"
+                ? "Set OPENCLAW_WORKSPACE_PATH to review daily memory."
+                : "Daily memory is unavailable. Check the workspace and retry.",
+              recovery: recurringResult.error === "not-configured" ? "configure" : "retry",
+            }
+          : {
+              state: recurring.datesReviewed > 0 ? "ready" : "empty",
+              message: recurring.datesReviewed > 0 ? "Daily memory reviewed." : "No daily memory files were found.",
+              recovery: null,
+            },
+      },
       requestedDate,
       generatedAt: new Date().toISOString(),
       nextMove: getNextMove(projectDoc.ageDays, recurring.tasks.length, staleWork.length),

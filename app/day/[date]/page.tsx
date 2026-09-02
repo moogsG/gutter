@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { EntryInput } from "@/components/journal/EntryInput";
 import { EntryItem } from "@/components/journal/EntryItem";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -25,6 +26,7 @@ import {
 	useUpdateEntryMutation,
 } from "@/store/api/journalApi";
 import type { Signifier } from "@/types/journal";
+import type { OptionalSourceState } from "@/types";
 import { toast } from "sonner";
 import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
@@ -288,6 +290,8 @@ export default function DayDetailPage() {
 
 	const [events, setEvents] = useState<CalendarEvent[]>([]);
 	const [meetingPreps, setMeetingPreps] = useState<MeetingPrep[]>([]);
+	const [calendarSource, setCalendarSource] = useState<OptionalSourceState | null>(null);
+	const [meetingPrepSource, setMeetingPrepSource] = useState<OptionalSourceState | null>(null);
 	const [_loading, setLoading] = useState(true);
 
 	// Use RTK Query for entries
@@ -306,7 +310,8 @@ export default function DayDetailPage() {
 			);
 			if (eventsRes.ok) {
 				const eventsData = await eventsRes.json();
-				setEvents(Array.isArray(eventsData) ? eventsData : []);
+				setEvents(Array.isArray(eventsData) ? eventsData : eventsData.events || []);
+				setCalendarSource(Array.isArray(eventsData) ? null : eventsData.source || null);
 			}
 
 			// Fetch meeting preps
@@ -314,6 +319,7 @@ export default function DayDetailPage() {
 			if (prepsRes.ok) {
 				const prepsData = await prepsRes.json();
 				setMeetingPreps(prepsData.meetings || []);
+				setMeetingPrepSource(prepsData.source || null);
 			}
 		} catch (error) {
 			console.error("Failed to load day data:", error);
@@ -337,6 +343,7 @@ export default function DayDetailPage() {
 				if (!res.ok) return;
 				const data = await res.json();
 				setMeetingPreps(data.meetings || []);
+				setMeetingPrepSource(data.source || null);
 			} catch {}
 		}, 4000);
 
@@ -498,6 +505,13 @@ export default function DayDetailPage() {
 						</span>
 					</div>
 				</div>
+
+				{calendarSource ? (
+					<OptionalSourceNotice source={calendarSource} onRetry={() => void loadDayData()} />
+				) : null}
+				{meetingPrepSource && meetingPrepSource.message !== calendarSource?.message ? (
+					<OptionalSourceNotice source={meetingPrepSource} onRetry={() => void loadDayData()} />
+				) : null}
 
 				<Separator />
 

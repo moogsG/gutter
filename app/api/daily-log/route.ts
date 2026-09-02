@@ -1,9 +1,11 @@
-import { promises as fs } from "node:fs";
+import { constants as fsConstants, existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 import type { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { getJournalDate } from "@/lib/journal-date";
+import { getOpenClawWorkspacePath } from "@/lib/paths";
+import type { OptionalSourceState } from "@/types";
 
 interface LogRow {
 	id: string;
@@ -12,6 +14,51 @@ interface LogRow {
 	completed_at?: string;
 	timestamp?: string;
 	type: string;
+}
+
+async function mirrorDailyLog(today: string, text: string): Promise<OptionalSourceState> {
+	let workspace: string;
+	try {
+		workspace = getOpenClawWorkspacePath();
+	} catch {
+		return {
+			state: "not-configured",
+			message: "OPENCLAW_WORKSPACE_PATH must be an absolute path to mirror daily notes.",
+			recovery: "configure",
+		};
+	}
+
+	if (!existsSync(workspace)) {
+		return {
+			state: "not-configured",
+			message: "Set OPENCLAW_WORKSPACE_PATH to mirror entries into daily notes.",
+			recovery: "configure",
+		};
+	}
+
+	try {
+		const memoryDir = path.join(workspace, "memory");
+		await fs.access(memoryDir, fsConstants.W_OK);
+		const dailyFile = path.join(memoryDir, `${today}.md`);
+		const time = new Date().toLocaleTimeString("en-US", {
+			hour: "numeric",
+			minute: "2-digit",
+			hour12: true,
+		});
+		await fs.appendFile(dailyFile, `\n- **${time}** — ${text}`);
+		return {
+			state: "ready",
+			message: "Entry mirrored into the daily note.",
+			recovery: null,
+		};
+	} catch (error) {
+		console.error("Failed to append to daily notes:", error);
+		return {
+			state: "unavailable",
+			message: "Daily-note mirroring is unavailable. Check the workspace and retry.",
+			recovery: "retry",
+		};
+	}
 }
 
 export async function GET(req: NextRequest) {
@@ -84,32 +131,8 @@ export async function POST(req: NextRequest) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(id, today, "note", text.trim(), "open", sortOrder, timestamp, timestamp);
 
-	// Also append to daily notes file
-	try {
-		const memoryDir = path.join(
-			process.cwd(),
-			"..",
-			".openclaw",
-			"workspace",
-			"memory",
-		);
-		const dailyFile = path.join(memoryDir, `${today}.md`);
+	// Also append to the optional daily notes file when its workspace exists.
+	const mirror = await mirrorDailyLog(today, text.trim());
 
-		// Ensure memory directory exists
-		await fs.mkdir(memoryDir, { recursive: true });
-
-		const time = new Date().toLocaleTimeString("en-US", {
-			hour: "numeric",
-			minute: "2-digit",
-			hour12: true,
-		});
-		const logEntry = `\n- **${time}** — ${text.trim()}`;
-
-		// Append to daily notes
-		await fs.appendFile(dailyFile, logEntry);
-	} catch (error) {
-		console.error("Failed to append to daily notes:", error);
-	}
-
-	return Response.json({ id, saved: true });
+	return Response.json({ id, saved: true, mirror });
 }

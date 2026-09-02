@@ -1,9 +1,13 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import type { LinkedInBoardData, LinkedInAnalyticsPost, LinkedInIdeaGroup, LinkedInPostLogEntry } from "@/types";
+import { join } from "node:path";
+import { getOpenClawWorkspacePath } from "@/lib/paths";
+import type { LinkedInBoardData, LinkedInAnalyticsPost, LinkedInIdeaGroup, LinkedInPostLogEntry, OptionalSourceState } from "@/types";
 
-const LINKEDIN_IDEAS_PATH = "/Users/moogs/.openclaw/workspace/linkedin-post-ideas.md";
-const LINKEDIN_LOG_PATH = "/Users/moogs/.openclaw/workspace/linkedin-post-log.md";
-const LINKEDIN_ANALYTICS_PATH = "/Users/moogs/.openclaw/workspace/linkedin-analytics.json";
+const WORKSPACE_PATH = getOpenClawWorkspacePath();
+const LINKEDIN_IDEAS_PATH = join(WORKSPACE_PATH, "linkedin-post-ideas.md");
+const LINKEDIN_LOG_PATH = join(WORKSPACE_PATH, "linkedin-post-log.md");
+const LINKEDIN_ANALYTICS_PATH = join(WORKSPACE_PATH, "linkedin-analytics.json");
 
 type LinkedInAnalyticsFile = {
   posts?: LinkedInAnalyticsPost[];
@@ -94,11 +98,35 @@ function buildNextMove(postingGapDays: number | null, drafts: ReturnType<typeof 
 }
 
 export async function buildLinkedInBoard(requestedDate: string): Promise<LinkedInBoardData> {
-  const [ideasMarkdown, postLogMarkdown, analyticsJson] = await Promise.all([
-    readFile(LINKEDIN_IDEAS_PATH, "utf8"),
-    readFile(LINKEDIN_LOG_PATH, "utf8"),
-    readFile(LINKEDIN_ANALYTICS_PATH, "utf8"),
-  ]);
+  let ideasMarkdown = "";
+  let postLogMarkdown = "";
+  let analyticsJson = '{"posts":[]}';
+  let source: OptionalSourceState;
+  try {
+    [ideasMarkdown, postLogMarkdown, analyticsJson] = await Promise.all([
+      readFile(LINKEDIN_IDEAS_PATH, "utf8"),
+      readFile(LINKEDIN_LOG_PATH, "utf8"),
+      readFile(LINKEDIN_ANALYTICS_PATH, "utf8"),
+    ]);
+    const hasContent = Boolean(ideasMarkdown.trim() || postLogMarkdown.trim() || JSON.parse(analyticsJson).posts?.length);
+    source = {
+      state: hasContent ? "ready" : "empty",
+      message: hasContent ? "LinkedIn planning data loaded." : "LinkedIn planning files contain no data.",
+      recovery: null,
+    };
+  } catch {
+    const notConfigured = !existsSync(WORKSPACE_PATH);
+    ideasMarkdown = "";
+    postLogMarkdown = "";
+    analyticsJson = '{"posts":[]}';
+    source = {
+      state: notConfigured ? "not-configured" : "unavailable",
+      message: notConfigured
+        ? "Set OPENCLAW_WORKSPACE_PATH to load LinkedIn planning data."
+        : "LinkedIn planning data is unavailable. Check the workspace and retry.",
+      recovery: notConfigured ? "configure" : "retry",
+    };
+  }
 
   const analytics = JSON.parse(analyticsJson) as LinkedInAnalyticsFile;
   const posts = (analytics.posts ?? []).sort((a, b) => b.date.localeCompare(a.date));
@@ -110,6 +138,7 @@ export async function buildLinkedInBoard(requestedDate: string): Promise<LinkedI
   const postingGapDays = latestLoggedPost ? daysBetween(latestLoggedPost.date, requestedDate) : null;
 
   return {
+    source,
     requestedDate,
     generatedAt: new Date().toISOString(),
     headline: postingGapDays && postingGapDays > 60

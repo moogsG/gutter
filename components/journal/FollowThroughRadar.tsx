@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AlertTriangle, ArrowUpRight, CheckCircle2, Clock3, ShieldAlert, Siren, Skull, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -204,7 +205,7 @@ function RadarSkeleton() {
 }
 
 export function FollowThroughRadar({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {
-  const { data, isLoading, error, isFetching } = useGetFollowThroughRadarQuery(date);
+  const { data, isLoading, error, isFetching, refetch } = useGetFollowThroughRadarQuery(date);
   const [updatePromise, { isLoading: isSavingPromise }] = useUpdateFollowThroughPromiseMutation();
   const [updateTask, { isLoading: isSavingTask }] = useUpdateFollowThroughTaskMutation();
 
@@ -247,6 +248,7 @@ export function FollowThroughRadar({ date, onDateChange }: { date: string; onDat
         {!isLoading && error ? <FailureState /> : null}
         {!isLoading && data ? (
           <div className="mx-auto flex max-w-6xl flex-col gap-4">
+            <OptionalSourceNotice source={data.source} onRetry={() => void refetch()} />
             <section className="rounded-[2rem] border border-primary/20 bg-[linear-gradient(135deg,rgba(255,61,154,0.16),rgba(255,255,255,0.02),rgba(251,191,36,0.10))] p-5 shadow-[0_0_60px_rgba(255,61,154,0.08)]">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
