@@ -26,17 +26,12 @@ import {
 } from "@/store/api/journalApi";
 import type { Signifier } from "@/types/journal";
 import { toast } from "sonner";
-
-function formatDate(date: Date): string {
-	return date.toISOString().split("T")[0];
-}
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 function getMigrateTargetDate(viewDate: string): string {
-	const today = formatDate(new Date());
+	const today = getJournalDate();
 	if (viewDate === today) {
-		const tomorrow = new Date();
-		tomorrow.setDate(tomorrow.getDate() + 1);
-		return formatDate(tomorrow);
+		return shiftJournalDate(today, 1);
 	}
 	return today;
 }
@@ -349,21 +344,17 @@ export default function DayDetailPage() {
 	}, [meetingPreps]);
 
 	const handlePrevDay = () => {
-		const currentDate = new Date(`${date}T12:00:00`);
-		currentDate.setDate(currentDate.getDate() - 1);
-		const newDate = currentDate.toISOString().split("T")[0];
+		const newDate = shiftJournalDate(date, -1);
 		router.push(`/day/${newDate}`);
 	};
 
 	const handleNextDay = () => {
-		const currentDate = new Date(`${date}T12:00:00`);
-		currentDate.setDate(currentDate.getDate() + 1);
-		const newDate = currentDate.toISOString().split("T")[0];
+		const newDate = shiftJournalDate(date, 1);
 		router.push(`/day/${newDate}`);
 	};
 
 	const handleToday = () => {
-		const today = new Date().toISOString().split("T")[0];
+		const today = getJournalDate();
 		router.push(`/day/${today}`);
 	};
 

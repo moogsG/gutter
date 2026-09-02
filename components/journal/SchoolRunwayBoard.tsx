@@ -6,16 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 import { useGetSchoolQuery } from "@/store/api/schoolApi";
 
 function getRuntimeTodayDate(): string {
-  return new Date().toISOString().split("T")[0];
+  return getJournalDate();
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 export function SchoolRunwayBoard({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {

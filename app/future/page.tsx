@@ -2,14 +2,19 @@
 
 import { useState } from "react";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { FutureLogEntryItem } from "@/components/journal/FutureLogEntryItem";
 import { SignifierIcon } from "@/components/journal/SignifierIcon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
 	useCreateFutureLogEntryMutation,
+	useDeleteFutureLogEntryMutation,
 	useGetFutureLogQuery,
+	useMarkFutureLogEntryMigratedMutation,
+	useUpdateFutureLogEntryMutation,
 } from "@/store/api/journalApi";
+import { getJournalDate } from "@/lib/journal-date";
 import type { Signifier } from "@/types/journal";
 
 const signifiers: Signifier[] = ["task", "appointment", "note"];
@@ -22,6 +27,9 @@ export default function FutureLogPage() {
 
 	const { data: entries = [] } = useGetFutureLogQuery();
 	const [createEntry, { isLoading: isCreating }] = useCreateFutureLogEntryMutation();
+	const [updateFutureEntry] = useUpdateFutureLogEntryMutation();
+	const [markFutureEntryMigrated] = useMarkFutureLogEntryMigratedMutation();
+	const [deleteFutureEntry] = useDeleteFutureLogEntryMutation();
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -40,6 +48,18 @@ export default function FutureLogPage() {
 		}
 	};
 
+	const handleUpdate = async (entry: Parameters<typeof updateFutureEntry>[0]) => {
+		await updateFutureEntry(entry).unwrap();
+	};
+
+	const handleMarkMigrated = async (id: string) => {
+		await markFutureEntryMigrated(id).unwrap();
+	};
+
+	const handleDelete = async (id: string) => {
+		await deleteFutureEntry(id).unwrap();
+	};
+
 	// Group entries by month
 	const grouped = entries.reduce(
 		(acc, entry) => {
@@ -56,7 +76,7 @@ export default function FutureLogPage() {
 	return (
 		<>
 			<JournalHeader
-				date={new Date().toISOString().split("T")[0]}
+				date={getJournalDate()}
 				onPrevDay={() => {}}
 				onNextDay={() => {}}
 				onToday={() => {}}
@@ -141,18 +161,13 @@ export default function FutureLogPage() {
 								<CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
 									<div className="space-y-1.5">
 										{grouped[month].map((entry) => (
-											<div
+											<FutureLogEntryItem
 												key={entry.id}
-												className="flex items-start gap-2.5 py-1.5"
-											>
-												<SignifierIcon
-													signifier={entry.signifier}
-													status="open"
-												/>
-												<p className="text-sm text-foreground break-words">
-													{entry.text}
-												</p>
-											</div>
+												entry={entry}
+												onUpdate={handleUpdate}
+												onMarkMigrated={handleMarkMigrated}
+												onDelete={handleDelete}
+											/>
 										))}
 									</div>
 								</CardContent>

@@ -1,18 +1,12 @@
 import { HabitsMomentumPageClient } from "@/components/journal/HabitsMomentumPageClient";
+import { getJournalDate } from "@/lib/journal-date";
 
 function isValidIsoDate(value: string | undefined): value is string {
   return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
 }
 
 function getCancunTodayDate(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 export default async function HabitsPage({

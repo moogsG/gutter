@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
 import { env } from "@/lib/env";
+import { getJournalDate } from "@/lib/journal-date";
 
 // Configuration
 export const CALENDAR_ENABLED = env.calendarEnabled;
@@ -246,7 +247,7 @@ export async function fetchCalendarEvents(
  * Get today's calendar events
  */
 export async function getTodayEvents(): Promise<CalendarEvent[]> {
-	const today = new Date().toISOString().split('T')[0];
+	const today = getJournalDate();
 	const result = await fetchCalendarEvents(today, today);
 	return result.data || [];
 }

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSchoolBoardData } from "@/lib/school";
+import { getJournalDate } from "@/lib/journal-date";
 
 function getRequestedDate(request: NextRequest): string {
-  return request.nextUrl.searchParams.get("date") || new Date().toISOString().split("T")[0];
+  return request.nextUrl.searchParams.get("date") || getJournalDate();
 }
 
 export async function GET(request: NextRequest) {

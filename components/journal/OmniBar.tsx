@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { VoiceButton } from "./VoiceButton";
 import { useLazySearchEntriesQuery, useLazySemanticSearchQuery } from "@/store/api/journalApi";
 import type { JournalEntry, SemanticSearchResult, Signifier } from "@/types/journal";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 interface OmniBarProps {
   onOpenShortcuts?: () => void;
@@ -63,87 +64,53 @@ const SIGNIFIER_ICONS: Record<Signifier, typeof Circle> = {
 
 function parseNaturalDate(input: string): string | null {
   const lower = input.toLowerCase().trim();
-  const today = new Date();
+  const today = getJournalDate();
 
-  if (lower === "today" || lower === "now") {
-    return formatDate(today);
-  }
-  if (lower === "yesterday") {
-    const d = new Date(today);
-    d.setDate(d.getDate() - 1);
-    return formatDate(d);
-  }
-  if (lower === "tomorrow") {
-    const d = new Date(today);
-    d.setDate(d.getDate() + 1);
-    return formatDate(d);
-  }
+  if (lower === "today" || lower === "now") return today;
+  if (lower === "yesterday") return shiftJournalDate(today, -1);
+  if (lower === "tomorrow") return shiftJournalDate(today, 1);
 
-  // "last monday", "last tuesday", etc.
+  const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const currentDay = new Date(`${today}T12:00:00Z`).getUTCDay();
   const lastDayMatch = lower.match(/^last\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/);
   if (lastDayMatch) {
-    const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-    const targetDay = days.indexOf(lastDayMatch[1]);
-    const d = new Date(today);
-    const currentDay = d.getDay();
-    let diff = currentDay - targetDay;
+    let diff = currentDay - days.indexOf(lastDayMatch[1]);
     if (diff <= 0) diff += 7;
-    d.setDate(d.getDate() - diff);
-    return formatDate(d);
+    return shiftJournalDate(today, -diff);
   }
 
-  // "next monday", etc.
   const nextDayMatch = lower.match(/^next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/);
   if (nextDayMatch) {
-    const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-    const targetDay = days.indexOf(nextDayMatch[1]);
-    const d = new Date(today);
-    const currentDay = d.getDay();
-    let diff = targetDay - currentDay;
+    let diff = days.indexOf(nextDayMatch[1]) - currentDay;
     if (diff <= 0) diff += 7;
-    d.setDate(d.getDate() + diff);
-    return formatDate(d);
+    return shiftJournalDate(today, diff);
   }
 
-  // "march 15", "mar 15", "3/15", etc.
   const monthDayMatch = lower.match(/^(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})$/);
   if (monthDayMatch) {
     const months: Record<string, number> = {
-      jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2,
-      apr: 3, april: 3, may: 4, jun: 5, june: 5, jul: 6, july: 6,
-      aug: 7, august: 7, sep: 8, september: 8, oct: 9, october: 9,
-      nov: 10, november: 10, dec: 11, december: 11,
+      jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3,
+      apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7,
+      aug: 8, august: 8, sep: 9, september: 9, oct: 10, october: 10,
+      nov: 11, november: 11, dec: 12, december: 12,
     };
     const month = months[monthDayMatch[1]];
     const day = parseInt(monthDayMatch[2], 10);
-    if (month !== undefined && day >= 1 && day <= 31) {
-      const d = new Date(today.getFullYear(), month, day);
-      return formatDate(d);
+    if (month && day >= 1 && day <= 31) {
+      return `${today.slice(0, 4)}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     }
   }
 
-  // "3/15" or "03/15"
   const slashMatch = lower.match(/^(\d{1,2})\/(\d{1,2})$/);
   if (slashMatch) {
-    const month = parseInt(slashMatch[1], 10) - 1;
+    const month = parseInt(slashMatch[1], 10);
     const day = parseInt(slashMatch[2], 10);
-    if (month >= 0 && month <= 11 && day >= 1 && day <= 31) {
-      const d = new Date(today.getFullYear(), month, day);
-      return formatDate(d);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return `${today.slice(0, 4)}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     }
   }
 
-  // ISO date "2026-03-15"
-  const isoMatch = lower.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (isoMatch) {
-    return lower;
-  }
-
-  return null;
-}
-
-function formatDate(date: Date): string {
-  return date.toISOString().split("T")[0];
+  return /^\d{4}-\d{2}-\d{2}$/.test(lower) ? lower : null;
 }
 
 function formatEntryDate(dateStr: string): string {

@@ -19,6 +19,7 @@ import {
 	useCreateCollectionMutation,
 	useGetCollectionsQuery,
 } from "@/store/api/journalApi";
+import { getJournalDate } from "@/lib/journal-date";
 
 export default function CollectionsPage() {
 	const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -45,7 +46,7 @@ export default function CollectionsPage() {
 	return (
 		<>
 			<JournalHeader
-				date={new Date().toISOString().split("T")[0]}
+				date={getJournalDate()}
 				onPrevDay={() => {}}
 				onNextDay={() => {}}
 				onToday={() => {}}

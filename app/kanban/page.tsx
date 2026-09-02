@@ -25,6 +25,7 @@ import {
   useMoveTaskMutation,
 } from "@/store/api/tasksApi";
 import type { Task } from "@/types";
+import { getJournalDate } from "@/lib/journal-date";
 
 const COLUMNS = [
   { id: "todo", title: "To Do", accentClass: "bg-muted-foreground", countClass: "bg-muted text-muted-foreground" },
@@ -109,7 +110,7 @@ export default function KanbanPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <JournalHeader
-        date={new Date().toISOString().split("T")[0]}
+        date={getJournalDate()}
         onPrevDay={() => {}}
         onNextDay={() => {}}
         onToday={() => {}}

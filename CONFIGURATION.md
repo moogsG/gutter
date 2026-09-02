@@ -12,11 +12,13 @@ Copy `.env.example` to `.env` and customize as needed.
 |----------|---------|-------------|
 | `PORT` | `3000` | HTTP server port |
 | `HOST` | `localhost` | Bind address |
+| `NEXT_PUBLIC_JOURNAL_TIME_ZONE` | `America/Cancun` | IANA timezone that owns journal dates across server and browser views |
 
 **Example:**
 ```env
 PORT=8080
 HOST=0.0.0.0
+NEXT_PUBLIC_JOURNAL_TIME_ZONE=America/Cancun
 ```
 
 ---

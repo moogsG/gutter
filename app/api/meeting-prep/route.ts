@@ -5,6 +5,7 @@ import type { NextRequest } from "next/server";
 import { promisify } from "node:util";
 import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { getJournalDate } from "@/lib/journal-date";
 
 const execAsync = promisify(exec);
 
@@ -13,7 +14,7 @@ import { getCalendarNames } from "@/lib/calendars";
 const CALENDARS = getCalendarNames();
 
 function formatDate(date: Date): string {
-	return date.toISOString().split("T")[0];
+	return getJournalDate(date);
 }
 
 // GET: Fetch upcoming meetings, join with DB prep data

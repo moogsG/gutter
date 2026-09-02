@@ -8,6 +8,7 @@ import { MeetingDrawer } from "@/components/meeting/MeetingDrawer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getCalendarColorToken } from "@/lib/calendar-colors";
+import { getJournalDate } from "@/lib/journal-date";
 import { cn } from "@/lib/utils";
 import { useGetMeetingPrepQuery } from "@/store/api/meetingPrepApi";
 import { useGetCalendarMonthQuery } from "@/store/api/tasksApi";
@@ -18,14 +19,7 @@ function formatMonth(date: Date): string {
 }
 
 function getCancunTodayDate(): string {
-	const parts = new Intl.DateTimeFormat("en-US", {
-		timeZone: "America/Cancun",
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-	}).formatToParts(new Date());
-	const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-	return `${lookup.year}-${lookup.month}-${lookup.day}`;
+	return getJournalDate();
 }
 
 function getRunwayAnchorDate(currentMonth: Date): string {

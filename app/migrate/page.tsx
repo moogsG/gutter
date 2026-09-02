@@ -12,17 +12,14 @@ import {
 	useUpdateEntryMutation,
 } from "@/store/api/journalApi";
 import { toast } from "sonner";
+import { getJournalDate } from "@/lib/journal-date";
 
 function formatMonth(date: Date): string {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function formatDate(date: Date): string {
-	return date.toISOString().split("T")[0];
-}
-
 function getTodayDateString(): string {
-	return formatDate(new Date());
+	return getJournalDate();
 }
 
 export default function MigratePage() {

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { MealPlanData, MealPlanGrocerySection, MealPlanMeal } from "@/types";
 import { getMealChecklist } from "@/lib/meal-plan-checklist";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 const execFileAsync = promisify(execFile);
 const WORKSPACE_ROOT = join(process.env.HOME || "/Users/moogs", ".openclaw", "workspace");
@@ -33,28 +34,17 @@ function isValidIsoDate(value: string): boolean {
 }
 
 export function getCancunTodayDate(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function getWeekStart(date: Date): string {
-  const local = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const day = local.getDay();
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-  local.setDate(local.getDate() + diffToMonday);
-  return local.toISOString().split("T")[0];
+  const localDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const diffToMonday = date.getDay() === 0 ? -6 : 1 - date.getDay();
+  return shiftJournalDate(localDate, diffToMonday);
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function formatRange(weekOf: string): string {

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sparkles, RefreshCw, Settings2, Calendar, ListChecks, Cloud, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getJournalDate } from "@/lib/journal-date";
 import Link from "next/link";
 import type { TodayFocusWidget } from "@/components/journal/today-focus/widget-types";
 import { TodayFocusFallbackCard, renderTodayFocusWidget } from "@/components/journal/today-focus/widgets";
@@ -57,14 +58,7 @@ function parseUiConfig(raw: string | null | undefined): Record<string, unknown> 
 }
 
 function getCancunTodayDate(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function getCellClasses(result: PromptResult): string {

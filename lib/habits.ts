@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { getDb } from "@/lib/db";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 import type {
   HabitsLegacySnapshotItem,
   HabitsMomentumData,
@@ -48,20 +49,11 @@ interface TrackerFile {
 }
 
 export function formatCancunIsoDate(date = new Date()): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate(date);
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function formatRange(start: string, end: string): string {

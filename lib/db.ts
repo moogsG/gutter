@@ -6,6 +6,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import Database from "@/lib/sqlite";
+import { getJournalDate } from "@/lib/journal-date";
 
 const CURRENT_SCHEMA_VERSION = 8;
 
@@ -358,7 +359,7 @@ export function getDb(): Database {
 		const lastBackup = dbInstance
 			.prepare("SELECT value FROM _meta WHERE key = 'last_backup'")
 			.get() as { value: string } | undefined;
-		const today = new Date().toISOString().split("T")[0];
+		const today = getJournalDate();
 		if (existed && (!lastBackup || !lastBackup.value.startsWith(today))) {
 			backupDatabase(dbInstance, requestedPath);
 			dbInstance

@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import type { DateNightData, DateNightEvent, DateNightLastGesture, DateNightPrep } from "@/types";
+import { shiftJournalDate } from "@/lib/journal-date";
 
 const execFileAsync = promisify(execFile);
 const WORKSPACE_ROOT = join(homedir(), ".openclaw", "workspace");
@@ -55,9 +56,7 @@ function isValidIsoDate(value: string): boolean {
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function daysBetween(fromDate: string, toDate: string): number {

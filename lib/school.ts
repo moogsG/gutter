@@ -6,6 +6,7 @@ import type {
   SchoolRunwayDay,
   SchoolRunwayEvent,
 } from "@/types";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 const FAMILY_CALENDARS = new Set(["Family Calendar", "Home"]);
 const SCHOOL_CALENDAR = "School";
@@ -44,9 +45,7 @@ function isValidIsoDate(value: string): boolean {
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function formatLongDate(date: string): string {
@@ -93,7 +92,7 @@ function summarizeDay(date: string, schoolEvents: SchoolRunwayEvent[], familyEve
 }
 
 function getRuntimeTodayDate(): string {
-  return new Date().toISOString().split("T")[0];
+  return getJournalDate();
 }
 
 function eventTouchesDate(event: SchoolRunwayEvent, date: string): boolean {

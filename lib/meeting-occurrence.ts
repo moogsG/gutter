@@ -1,3 +1,5 @@
+import { getJournalDate } from "@/lib/journal-date";
+
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export function isValidMeetingOccurrenceDate(value: unknown): value is string {
@@ -30,9 +32,9 @@ export function resolveMeetingOccurrenceDate({
 	if (typeof time === "string") {
 		const parsedTime = new Date(time);
 		if (!Number.isNaN(parsedTime.getTime())) {
-			return parsedTime.toISOString().split("T")[0];
+			return getJournalDate(parsedTime);
 		}
 	}
 
-	return now.toISOString().split("T")[0];
+	return getJournalDate(now);
 }

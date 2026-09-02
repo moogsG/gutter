@@ -1,26 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { calendarCache, fetchCalendarEvents } from "@/lib/calendar";
 import { buildCalendarRunway } from "@/lib/calendar-runway";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import type { CalendarEvent } from "@/types";
 
 function getRequestedDate(input: string | null): string {
   if (input && /^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
-
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function parseFailedCalendars(lastError: string | null): string[] {

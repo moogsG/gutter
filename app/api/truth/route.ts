@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { type NextRequest, NextResponse } from "next/server";
 import { handleApiError } from "@/lib/api-error-handler";
 import { getDb } from "@/lib/db";
+import { getJournalDate } from "@/lib/journal-date";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import type { ProjectTruthData, ProjectTruthLiveTask, ProjectTruthProject, ProjectTruthRecurringTask } from "@/types";
 
@@ -23,15 +24,7 @@ type TaskRow = {
 
 function getRequestedDate(input: string | null): string {
   if (input && /^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
-
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function daysBetween(from: string, to: string): number {

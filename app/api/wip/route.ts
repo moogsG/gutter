@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { getJournalDate } from "@/lib/journal-date";
 import { handleApiError, handleValidationError } from "@/lib/api-error-handler";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import type { WipLimitData, WipLimitItem } from "@/types";
@@ -17,12 +18,7 @@ type WipRow = {
 };
 
 function getLocalDateString() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+  return getJournalDate();
 }
 
 function parseTags(raw: string | null) {

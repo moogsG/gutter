@@ -4,36 +4,19 @@ import { join } from "node:path";
 import { getChoreBoardData } from "@/lib/chores";
 import { getDateNightData } from "@/lib/date-night";
 import { getDb } from "@/lib/db";
+import { getJournalDate, JOURNAL_TIME_ZONE, shiftJournalDate } from "@/lib/journal-date";
 import { getMealPlanData } from "@/lib/meal-plan";
 import { fetchCalendarEvents } from "@/lib/calendar";
 import type { TomorrowLaunchpadData, TomorrowLaunchpadMeeting } from "@/types";
 
 const WORKSPACE_ROOT = join(homedir(), ".openclaw", "workspace");
 
-function getCancunDateParts(date: Date) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return {
-    year: Number.parseInt(lookup.year, 10),
-    month: Number.parseInt(lookup.month, 10),
-    day: Number.parseInt(lookup.day, 10),
-  };
-}
-
 export function getDefaultTodayDate(): string {
-  const today = getCancunDateParts(new Date());
-  return `${today.year}-${String(today.month).padStart(2, "0")}-${String(today.day).padStart(2, "0")}`;
+  return getJournalDate();
 }
 
 export function shiftIsoDate(date: string, days: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + days);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, days);
 }
 
 export function getDefaultTomorrowDate(): string {
@@ -47,7 +30,7 @@ export function getRequestedDate(rawDate: string | null, fallback: "today" | "to
 
 export function getDisplayDate(date: string): string {
   return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
+    timeZone: JOURNAL_TIME_ZONE,
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -55,10 +38,9 @@ export function getDisplayDate(date: string): string {
 }
 
 function getWeekStart(date: string): string {
-  const base = new Date(`${date}T12:00:00`);
-  const offset = (base.getDay() + 6) % 7;
-  base.setDate(base.getDate() - offset);
-  return base.toISOString().split("T")[0];
+  const base = new Date(`${date}T12:00:00Z`);
+  const offset = (base.getUTCDay() + 6) % 7;
+  return shiftJournalDate(date, -offset);
 }
 
 export function findSectionLines(markdown: string, heading: string): string[] {

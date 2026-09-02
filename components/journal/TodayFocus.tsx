@@ -7,22 +7,17 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useState } from "react";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 interface TodayFocusProps {
   entries: JournalEntry[];
   date: string;
 }
 
-function formatDate(date: Date): string {
-  return date.toISOString().split("T")[0];
-}
-
 function getMigrateTargetDate(viewDate: string): string {
-  const today = formatDate(new Date());
+  const today = getJournalDate();
   if (viewDate === today) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return formatDate(tomorrow);
+    return shiftJournalDate(today, 1);
   }
   return today;
 }

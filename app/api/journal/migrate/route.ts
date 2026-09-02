@@ -56,28 +56,37 @@ export async function POST(req: NextRequest) {
 
 			let sortOrder = (maxOrder?.max ?? -1) + 1;
 
-			for (const entryId of normalizedIds) {
-				const original = db
+			const originals = normalizedIds.map((entryId) =>
+				db
 					.prepare("SELECT * FROM journal_entries WHERE id = ?")
-					.get(entryId) as any;
-
-				if (!original) {
-					skippedCount++;
-					continue;
+					.get(entryId) as any,
+			);
+			const migratable = originals.filter(
+				(original) =>
+					original && isValidIsoDate(original.date) && original.date !== targetDate,
+			);
+			skippedCount = originals.length - migratable.length;
+			const idMap = new Map(
+				migratable.map((original) => [
+					original.id as string,
+					`je-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+				]),
+			);
+			const depth = (entry: any): number => {
+				const visited = new Set<string>();
+				let current = entry;
+				let result = 0;
+				while (current?.parent_id && idMap.has(current.parent_id) && !visited.has(current.id)) {
+					visited.add(current.id);
+					current = migratable.find((candidate) => candidate.id === current.parent_id);
+					result++;
 				}
+				return result;
+			};
+			migratable.sort((left, right) => depth(left) - depth(right));
 
-				if (!isValidIsoDate(original.date)) {
-					skippedCount++;
-					continue;
-				}
-
-				// Enforce "migrate always to tomorrow" and skip same-day no-ops.
-				if (original.date === targetDate) {
-					skippedCount++;
-					continue;
-				}
-
-				const newId = `je-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+			for (const original of migratable) {
+				const newId = idMap.get(original.id)!;
 
 				db.prepare(
 					`INSERT INTO journal_entries 
@@ -95,14 +104,14 @@ export async function POST(req: NextRequest) {
 					original.lane ?? null,
 					original.priority ?? null,
 					original.waiting_on ?? null,
-					original.parent_id ?? null,
+					original.parent_id ? idMap.get(original.parent_id) ?? null : null,
 					now,
 					now,
 				);
 
 				db.prepare(
 					"UPDATE journal_entries SET status = 'migrated', migrated_to = ?, updated_at = ? WHERE id = ?",
-				).run(targetDate, now, entryId);
+				).run(targetDate, now, original.id);
 
 				migratedCount++;
 			}

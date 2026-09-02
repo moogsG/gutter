@@ -3,6 +3,7 @@ import path from "node:path";
 import type { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { getJournalDate } from "@/lib/journal-date";
 
 interface LogRow {
 	id: string;
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
 	if (limited) return limited;
 
 	const db = getDb();
-	const today = new Date().toISOString().split("T")[0];
+	const today = getJournalDate();
 
 	// Completed tasks (journal entries with status 'done')
 	const completed = db
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
 
 	const db = getDb();
 	const timestamp = new Date().toISOString();
-	const today = new Date().toISOString().split("T")[0];
+	const today = getJournalDate();
 	const id = `je-${Date.now()}`;
 
 	// Get next sort order for today
@@ -85,7 +86,6 @@ export async function POST(req: NextRequest) {
 
 	// Also append to daily notes file
 	try {
-		const today = new Date().toISOString().split("T")[0];
 		const memoryDir = path.join(
 			process.cwd(),
 			"..",

@@ -1,9 +1,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ChoreBoardData } from "@/types";
+import { JOURNAL_TIME_ZONE } from "@/lib/journal-date";
 
 const CHORE_STATE_PATH = "/Users/moogs/.openclaw/workspace/memory/chore-state.json";
-const CHORE_TIMEZONE = "America/Cancun";
+const CHORE_TIMEZONE = JOURNAL_TIME_ZONE;
 const STALE_CYCLE_DAYS = 21;
 const DEFAULT_CHORES = [
   "Bathroom 1",

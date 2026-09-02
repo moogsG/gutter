@@ -12,12 +12,14 @@ describe("POST /api/journal/migrate", () => {
 	});
 
 	beforeEach(() => {
+		db.prepare("DELETE FROM journal_entries WHERE parent_id LIKE 'migrate-test-%'").run();
 		db.prepare("DELETE FROM journal_entries WHERE id LIKE 'migrate-test-%'").run();
 		db.prepare("DELETE FROM journal_entries WHERE text LIKE 'migrate-test-%'").run();
 		clearRateLimitState();
 	});
 
 	afterEach(() => {
+		db.prepare("DELETE FROM journal_entries WHERE parent_id LIKE 'migrate-test-%'").run();
 		db.prepare("DELETE FROM journal_entries WHERE id LIKE 'migrate-test-%'").run();
 		db.prepare("DELETE FROM journal_entries WHERE text LIKE 'migrate-test-%'").run();
 	});
@@ -263,5 +265,69 @@ describe("POST /api/journal/migrate", () => {
 		expect(migrated.priority).toBe("high");
 		expect(migrated.waiting_on).toBe("Alex");
 		expect(migrated.parent_id).toBeNull();
+	});
+
+	it("remaps a migrated child to the migrated parent's new ID regardless of request order", async () => {
+		const now = new Date().toISOString();
+		for (const [id, parentId, sortOrder] of [
+			["migrate-test-parent", null, 0],
+			["migrate-test-child", "migrate-test-parent", 1],
+		] as const) {
+			db.prepare(
+				`INSERT INTO journal_entries (id, date, signifier, text, status, sort_order, parent_id, created_at, updated_at)
+				 VALUES (?, '2099-02-01', 'task', ?, 'open', ?, ?, ?, ?)`,
+			).run(id, id, sortOrder, parentId, now, now);
+		}
+
+		const response = await POST(
+			new NextRequest("http://localhost:3000/api/journal/migrate", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					entryIds: ["migrate-test-child", "migrate-test-parent"],
+					targetDate: "2099-02-02",
+				}),
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		const migrated = db
+			.prepare(
+				"SELECT id, text, parent_id FROM journal_entries WHERE date = '2099-02-02' ORDER BY sort_order",
+			)
+			.all() as Array<{ id: string; text: string; parent_id: string | null }>;
+		const parent = migrated.find((entry) => entry.text === "migrate-test-parent");
+		const child = migrated.find((entry) => entry.text === "migrate-test-child");
+		expect(parent).toBeDefined();
+		expect(child?.parent_id).toBe(parent?.id);
+	});
+
+	it("makes a migrated child top-level when its parent is not migrated", async () => {
+		const now = new Date().toISOString();
+		db.prepare(
+			`INSERT INTO journal_entries (id, date, signifier, text, status, sort_order, created_at, updated_at)
+			 VALUES ('migrate-test-unselected-parent', '2099-03-01', 'task', 'migrate-test-unselected-parent', 'open', 0, ?, ?)`,
+		).run(now, now);
+		db.prepare(
+			`INSERT INTO journal_entries (id, date, signifier, text, status, sort_order, parent_id, created_at, updated_at)
+			 VALUES ('migrate-test-orphan-child', '2099-03-01', 'task', 'migrate-test-orphan-child', 'open', 1, 'migrate-test-unselected-parent', ?, ?)`,
+		).run(now, now);
+
+		const response = await POST(
+			new NextRequest("http://localhost:3000/api/journal/migrate", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					entryIds: ["migrate-test-orphan-child"],
+					targetDate: "2099-03-02",
+				}),
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		const child = db
+			.prepare("SELECT parent_id FROM journal_entries WHERE text = ? AND date = ?")
+			.get("migrate-test-orphan-child", "2099-03-02") as { parent_id: string | null };
+		expect(child.parent_id).toBeNull();
 	});
 });

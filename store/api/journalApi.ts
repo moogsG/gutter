@@ -344,6 +344,29 @@ export const journalApi = createApi({
       }),
       invalidatesTags: ["FutureLog"],
     }),
+    updateFutureLogEntry: builder.mutation<
+      FutureLogEntry,
+      Pick<FutureLogEntry, "id" | "target_month" | "signifier" | "text">
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/future-log/${id}`,
+        method: "PATCH",
+        body,
+      }),
+      invalidatesTags: ["FutureLog"],
+    }),
+    markFutureLogEntryMigrated: builder.mutation<FutureLogEntry, string>({
+      query: (id) => ({
+        url: `/future-log/${id}`,
+        method: "PATCH",
+        body: { migrated: true },
+      }),
+      invalidatesTags: ["FutureLog"],
+    }),
+    deleteFutureLogEntry: builder.mutation<{ success: boolean }, string>({
+      query: (id) => ({ url: `/future-log/${id}`, method: "DELETE" }),
+      invalidatesTags: ["FutureLog"],
+    }),
     searchEntries: builder.query<JournalEntry[], string>({
       query: (q) => `/journal/search?q=${encodeURIComponent(q)}&limit=20`,
     }),
@@ -404,6 +427,9 @@ export const {
   useGetCollectionQuery,
   useGetFutureLogQuery,
   useCreateFutureLogEntryMutation,
+  useUpdateFutureLogEntryMutation,
+  useMarkFutureLogEntryMigratedMutation,
+  useDeleteFutureLogEntryMutation,
   useSearchEntriesQuery,
   useLazySearchEntriesQuery,
   useSemanticSearchQuery,
