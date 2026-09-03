@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
 	Dialog,
 	DialogContent,
+	DialogDescription,
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
@@ -18,27 +19,34 @@ import {
 	useCreateCollectionMutation,
 	useGetCollectionsQuery,
 } from "@/store/api/journalApi";
+import { getJournalDate } from "@/lib/journal-date";
 
 export default function CollectionsPage() {
 	const [isDialogOpen, setIsDialogOpen] = useState(false);
 	const [title, setTitle] = useState("");
+	const [createError, setCreateError] = useState<string | null>(null);
 
 	const { data: collections = [] } = useGetCollectionsQuery();
-	const [createCollection] = useCreateCollectionMutation();
+	const [createCollection, { isLoading: isCreating }] = useCreateCollectionMutation();
 
-	const handleSubmit = (e: React.FormEvent) => {
+	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!title.trim()) return;
 
-		createCollection({ title: title.trim() });
-		setTitle("");
-		setIsDialogOpen(false);
+		setCreateError(null);
+		try {
+			await createCollection({ title: title.trim() }).unwrap();
+			setTitle("");
+			setIsDialogOpen(false);
+		} catch {
+			setCreateError("Could not create the collection. Your title is still here.");
+		}
 	};
 
 	return (
 		<>
 			<JournalHeader
-				date={new Date().toISOString().split("T")[0]}
+				date={getJournalDate()}
 				onPrevDay={() => {}}
 				onNextDay={() => {}}
 				onToday={() => {}}
@@ -49,7 +57,10 @@ export default function CollectionsPage() {
 						<h2 className="text-lg sm:text-2xl font-bold text-foreground">
 							Collections
 						</h2>
-						<Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+						<Dialog open={isDialogOpen} onOpenChange={(open) => {
+							setIsDialogOpen(open);
+							if (!open) setCreateError(null);
+						}}>
 							<DialogTrigger asChild>
 								<Button size="sm">
 									<Plus className="w-4 h-4 sm:mr-2" />
@@ -59,6 +70,7 @@ export default function CollectionsPage() {
 							<DialogContent className="mx-4 sm:mx-auto max-w-sm">
 								<DialogHeader>
 									<DialogTitle>Create Collection</DialogTitle>
+									<DialogDescription>Name a collection for related journal entries.</DialogDescription>
 								</DialogHeader>
 								<form onSubmit={handleSubmit} className="space-y-4">
 									<Input
@@ -68,12 +80,15 @@ export default function CollectionsPage() {
 										placeholder="Collection title"
 										autoFocus
 									/>
+									{createError && (
+										<p role="alert" className="text-sm text-destructive">{createError}</p>
+									)}
 									<Button
 										type="submit"
-										disabled={!title.trim()}
+										disabled={!title.trim() || isCreating}
 										className="w-full"
 									>
-										Create
+										{createError ? "Try again" : isCreating ? "Creating…" : "Create"}
 									</Button>
 								</form>
 							</DialogContent>

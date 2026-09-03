@@ -12,11 +12,13 @@ Copy `.env.example` to `.env` and customize as needed.
 |----------|---------|-------------|
 | `PORT` | `3000` | HTTP server port |
 | `HOST` | `localhost` | Bind address |
+| `NEXT_PUBLIC_JOURNAL_TIME_ZONE` | `America/Cancun` | IANA timezone that owns journal dates across server and browser views |
 
 **Example:**
 ```env
 PORT=8080
 HOST=0.0.0.0
+NEXT_PUBLIC_JOURNAL_TIME_ZONE=America/Cancun
 ```
 
 ---
@@ -141,26 +143,40 @@ JOURNAL_COMMAND_MODEL=qwen3:latest
 
 ---
 
+## Local OpenClaw Workspace (optional)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENCLAW_WORKSPACE_PATH` | `~/.openclaw/workspace` | Absolute root for optional local files used by chores, meals, projects, LinkedIn, radar, and meeting prep |
+| `OPENCLAW_AGENTS_PATH` | `~/.openclaw/agents` | Absolute root for optional local agent transcripts used by the Sessions board |
+| `BUN_BIN` | `bun` | Bun executable name or path used by the meal planner |
+
+The app derives integration files beneath these roots. Set absolute overrides
+when the data is elsewhere; otherwise the home-relative defaults are used.
+Missing local files degrade their boards without stopping the journal.
+
+---
+
 ## Apple Calendar Integration (macOS only)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CALENDARS` | `Calendar` | Comma-separated list of calendar names to sync |
-| `ACCLI_CMD` | `accli` | Path to accli binary (auto-detected if in PATH) |
+| `CALENDAR_CLI` | `npx @joargp/accli` | Command prefix for the supported accli JSON protocol |
 | `CALENDAR_ENABLED` | `true` | Enable/disable calendar integration |
 | `CALENDAR_DEFAULT_NAME` | `Home` | Default calendar used when creating events without explicit calendar |
 
 **Example:**
 ```env
 CALENDARS=Calendar,Family Calendar,Work,Home
-ACCLI_CMD=/usr/local/bin/accli
+CALENDAR_CLI=npx @joargp/accli
 CALENDAR_ENABLED=true
 ```
 
 **Setup:**
-1. Install accli: `npm install -g @joargp/accli`
-2. Grant Calendar permissions: `npx @joargp/accli calendars list`
-3. List your calendars: `npx @joargp/accli calendars list`
+1. Ensure `npx` is available on `PATH`; it resolves the configured `@joargp/accli` package command.
+2. Grant Calendar permissions when macOS prompts.
+3. List your calendars with `npx @joargp/accli calendars`.
 4. Add calendar names to `CALENDARS` (exact match, case-sensitive)
 
 **Google Calendar as sync hub (recommended for Apple + Docker workflows):**
@@ -241,10 +257,12 @@ SLACK_CHANNELS=C029BN2FBPD|dev-chat,C027SHEDUET|senior-devs,C028XYZ|design
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `WHISPER_MODEL_PATH` | `~/.cache/whisper/ggml-base.en.bin` | Path to Whisper model file |
+| `FFMPEG_BIN` | `ffmpeg` | ffmpeg executable name or path (resolved from `PATH` by default) |
+| `WHISPER_BIN` | `whisper-cli` | whisper.cpp executable name or path (resolved from `PATH` by default) |
 
 **Example:**
 ```env
-WHISPER_MODEL_PATH=/Users/you/.cache/whisper/ggml-base.en.bin
+WHISPER_MODEL_PATH=/absolute/path/to/ggml-base.en.bin
 ```
 
 **Setup:**
@@ -323,7 +341,7 @@ DEFAULT_THEME=cyberpink
 
 # Calendars (macOS only)
 CALENDARS=Calendar,Family Calendar,Work,Home
-ACCLI_CMD=accli
+CALENDAR_CLI=npx @joargp/accli
 CALENDAR_ENABLED=true
 
 # Ollama

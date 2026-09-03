@@ -5,15 +5,14 @@ import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { logValidationFailure } from "@/lib/security-logger";
 import { validateJournalEntry } from "@/lib/validation";
 import { upsertJournalEntry } from "@/lib/vector-store";
+import { shiftJournalDate } from "@/lib/journal-date";
 
 function isValidIsoDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
 function shiftIsoDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 export async function POST(req: NextRequest) {

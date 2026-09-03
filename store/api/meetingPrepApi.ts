@@ -1,12 +1,12 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { MeetingPrep, MeetingPrepQueueData } from "@/types";
+import type { MeetingPrepData, MeetingPrepQueueData } from "@/types";
 
 export const meetingPrepApi = createApi({
   reducerPath: "meetingPrepApi",
   baseQuery: fetchBaseQuery({ baseUrl: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/api` }),
   tagTypes: ["MeetingPrep"],
   endpoints: (builder) => ({
-    getMeetingPrep: builder.query<{ meetings: MeetingPrep[] }, void>({
+    getMeetingPrep: builder.query<MeetingPrepData, void>({
       query: () => "/meeting-prep",
       providesTags: ["MeetingPrep"],
     }),
@@ -20,6 +20,7 @@ export const meetingPrepApi = createApi({
       title: string;
       time: string;
       calendar: string;
+      occurrenceDate?: string;
       context?: string;
     }>({
       query: (body) => ({
@@ -34,6 +35,7 @@ export const meetingPrepApi = createApi({
       title: string;
       time: string;
       calendar: string;
+      occurrenceDate?: string;
       transcript: string;
     }>({
       query: (body) => ({

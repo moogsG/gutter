@@ -6,8 +6,9 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import Database from "@/lib/sqlite";
+import { getJournalDate } from "@/lib/journal-date";
 
-const CURRENT_SCHEMA_VERSION = 8;
+const CURRENT_SCHEMA_VERSION = 9;
 
 type Migration = {
 	version: number;
@@ -249,6 +250,24 @@ const migrations: Migration[] = [
 			`);
 		},
 	},
+	{
+		version: 9,
+		up(db) {
+			db.exec(`
+				CREATE TABLE IF NOT EXISTS habit_check_ins (
+					id TEXT PRIMARY KEY,
+					habit_id TEXT NOT NULL,
+					date TEXT NOT NULL,
+					state TEXT NOT NULL CHECK (state IN ('done', 'skipped')),
+					created_at TEXT NOT NULL DEFAULT (datetime('now')),
+					updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+					UNIQUE (habit_id, date)
+				);
+				CREATE INDEX IF NOT EXISTS idx_habit_check_ins_date
+					ON habit_check_ins(date);
+			`);
+		},
+	},
 ];
 
 export function getSchemaVersion(db: Database): number {
@@ -358,7 +377,7 @@ export function getDb(): Database {
 		const lastBackup = dbInstance
 			.prepare("SELECT value FROM _meta WHERE key = 'last_backup'")
 			.get() as { value: string } | undefined;
-		const today = new Date().toISOString().split("T")[0];
+		const today = getJournalDate();
 		if (existed && (!lastBackup || !lastBackup.value.startsWith(today))) {
 			backupDatabase(dbInstance, requestedPath);
 			dbInstance

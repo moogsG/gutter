@@ -1,9 +1,11 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { ChoreBoardData } from "@/types";
+import { JOURNAL_TIME_ZONE } from "@/lib/journal-date";
+import { getOpenClawWorkspacePath } from "@/lib/paths";
 
-const CHORE_STATE_PATH = "/Users/moogs/.openclaw/workspace/memory/chore-state.json";
-const CHORE_TIMEZONE = "America/Cancun";
+const CHORE_STATE_PATH = join(getOpenClawWorkspacePath(), "memory", "chore-state.json");
+const CHORE_TIMEZONE = JOURNAL_TIME_ZONE;
 const STALE_CYCLE_DAYS = 21;
 const DEFAULT_CHORES = [
   "Bathroom 1",
@@ -194,6 +196,11 @@ function buildBoard(state: ChoreState): ChoreBoardData {
       : "Cycle is clear. Start the next one and keep the house from quietly mutating into a landfill.";
 
   return {
+    source: {
+      state: "ready",
+      message: "Chore cycle loaded.",
+      recovery: null,
+    },
     generatedAt: new Date().toISOString(),
     cycleNumber: pair.state.cycleNumber,
     cycleStartedAt: pair.state.cycleStartedAt,
@@ -229,6 +236,25 @@ function buildBoard(state: ChoreState): ChoreBoardData {
 }
 
 export function getChoreBoardData() {
+  if (!existsSync(getOpenClawWorkspacePath())) {
+    return {
+      source: {
+        state: "not-configured",
+        message: "Chores needs an OpenClaw workspace before it can store a cycle.",
+        recovery: "configure",
+      },
+      generatedAt: new Date().toISOString(),
+      cycleNumber: 0,
+      cycleStartedAt: getTodayIso(),
+      lastCompletedCycleAt: null,
+      counts: { total: 0, completed: 0, remaining: 0 },
+      suggestedChoices: [],
+      chores: [],
+      history: [],
+      nextMove: "Set OPENCLAW_WORKSPACE_PATH to enable chore tracking.",
+    } satisfies ChoreBoardData;
+  }
+
   return buildBoard(loadState());
 }
 

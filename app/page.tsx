@@ -8,6 +8,7 @@ import { TodayFocus } from "@/components/journal/TodayFocus";
 import { MorningView } from "@/components/journal/MorningView";
 import { CaptureDialog } from "@/components/journal/CaptureDialog";
 import { EmptyTodayPrompt } from "@/components/journal/EmptyTodayPrompt";
+import { TodayHabitCheckIns } from "@/components/journal/TodayHabitCheckIns";
 import {
 	journalApi,
 	useAddEntryMutation,
@@ -19,17 +20,12 @@ import {
 import { useAppDispatch } from "@/store/store";
 import type { Signifier } from "@/types/journal";
 import { toast } from "sonner";
-
-function formatDate(date: Date): string {
-	return date.toISOString().split("T")[0];
-}
+import { getJournalDate, isValidJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 function getMigrateTargetDate(viewDate: string): string {
-	const today = formatDate(new Date());
+	const today = getJournalDate();
 	if (viewDate === today) {
-		const tomorrow = new Date();
-		tomorrow.setDate(tomorrow.getDate() + 1);
-		return formatDate(tomorrow);
+		return shiftJournalDate(today, 1);
 	}
 	return today;
 }
@@ -46,9 +42,7 @@ function findEntryById(entries: any[], id: string): any | undefined {
 }
 
 export default function JournalPage() {
-	const [currentDate, setCurrentDate] = useState<string>(
-		formatDate(new Date()),
-	);
+	const [currentDate, setCurrentDate] = useState<string>(getJournalDate);
 	const { data: entries = [], isLoading } = useGetEntriesQuery(currentDate);
 	const [addEntry] = useAddEntryMutation();
 	const [updateEntry] = useUpdateEntryMutation();
@@ -56,54 +50,40 @@ export default function JournalPage() {
 	const [migrateEntries] = useMigrateEntriesMutation();
 	const dispatch = useAppDispatch();
 
+	useEffect(() => {
+		const requestedDate = new URLSearchParams(window.location.search).get("date");
+		if (isValidJournalDate(requestedDate)) setCurrentDate(requestedDate);
+	}, []);
+
 	// Prefetch adjacent days for instant navigation
 	useEffect(() => {
-		const current = new Date(`${currentDate}T12:00:00`);
-		const prev = new Date(current);
-		prev.setDate(prev.getDate() - 1);
-		const next = new Date(current);
-		next.setDate(next.getDate() + 1);
-
 		dispatch(
-			journalApi.endpoints.getEntries.initiate(formatDate(prev), {
+			journalApi.endpoints.getEntries.initiate(shiftJournalDate(currentDate, -1), {
 				forceRefetch: false,
 			}),
 		);
 		dispatch(
-			journalApi.endpoints.getEntries.initiate(formatDate(next), {
+			journalApi.endpoints.getEntries.initiate(shiftJournalDate(currentDate, 1), {
 				forceRefetch: false,
 			}),
 		);
 	}, [currentDate, dispatch]);
 
-	// Listen for OmniBar date navigation
-	useEffect(() => {
-		const handler = (e: Event) => {
-			const date = (e as CustomEvent<string>).detail;
-			if (date) setCurrentDate(date);
-		};
-		window.addEventListener("omnibar-navigate-date", handler);
-		return () => window.removeEventListener("omnibar-navigate-date", handler);
-	}, []);
 
 	const handlePrevDay = useCallback(() => {
 		setCurrentDate((prev) => {
-			const date = new Date(`${prev}T12:00:00`);
-			date.setDate(date.getDate() - 1);
-			return formatDate(date);
+			return shiftJournalDate(prev, -1);
 		});
 	}, []);
 
 	const handleNextDay = useCallback(() => {
 		setCurrentDate((prev) => {
-			const date = new Date(`${prev}T12:00:00`);
-			date.setDate(date.getDate() + 1);
-			return formatDate(date);
+			return shiftJournalDate(prev, 1);
 		});
 	}, []);
 
 	const handleToday = useCallback(() => {
-		setCurrentDate(formatDate(new Date()));
+		setCurrentDate(getJournalDate());
 	}, []);
 
 	const handleAddEntry = useCallback(
@@ -153,8 +133,8 @@ export default function JournalPage() {
 	);
 
 	const handleKill = useCallback(
-		(id: string) => {
-			updateEntry({ id, status: "killed", _date: currentDate });
+		async (id: string) => {
+			await updateEntry({ id, status: "killed", _date: currentDate }).unwrap();
 		},
 		[updateEntry, currentDate],
 	);
@@ -169,6 +149,14 @@ export default function JournalPage() {
 	);
 
 	const [captureOpen, setCaptureOpen] = useState(false);
+	const [captureMode, setCaptureMode] = useState<"default" | "task">("default");
+
+	useEffect(() => {
+		if (new URLSearchParams(window.location.search).get("capture") === "task") {
+			setCaptureMode("task");
+			setCaptureOpen(true);
+		}
+	}, []);
 
 	const handleEntriesCreated = useCallback(() => {
 		dispatch(
@@ -188,6 +176,7 @@ export default function JournalPage() {
 	}, [dispatch, currentDate]);
 
 	const handleOpenCapture = useCallback(() => {
+		setCaptureMode("default");
 		setCaptureOpen(true);
 	}, []);
 
@@ -244,11 +233,13 @@ export default function JournalPage() {
 			/>
 			<CaptureDialog
 				date={currentDate}
+				captureMode={captureMode}
 				onEntriesCreated={handleEntriesCreated}
 				open={captureOpen}
 				onOpenChange={setCaptureOpen}
 			/>
 			<EntryInput date={currentDate} onSubmit={handleAddEntry} />
+			<TodayHabitCheckIns date={currentDate} />
 			{entries.length === 0 ? (
 				<EmptyTodayPrompt date={currentDate} onOpenCapture={handleOpenCapture} />
 			) : (

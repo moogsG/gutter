@@ -1,17 +1,20 @@
 import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { MealPlanData, MealPlanGrocerySection, MealPlanMeal } from "@/types";
 import { getMealChecklist } from "@/lib/meal-plan-checklist";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
+import { getExecutable, getOpenClawWorkspacePath } from "@/lib/paths";
 
 const execFileAsync = promisify(execFile);
-const WORKSPACE_ROOT = join(process.env.HOME || "/Users/moogs", ".openclaw", "workspace");
+const WORKSPACE_ROOT = getOpenClawWorkspacePath();
 const MEAL_PLANNER_ROOT = join(WORKSPACE_ROOT, "meal-planner");
 const PLANS_DIR = join(MEAL_PLANNER_ROOT, "plans");
 const MEAL_GENERATOR_PATH = join(MEAL_PLANNER_ROOT, "src", "meal-generator.ts");
-const BUN_BIN = process.env.BUN_BIN || "/opt/homebrew/bin/bun";
+const BUN_BIN = getExecutable("BUN_BIN", "bun");
 
 interface StoredWeeklyPlan {
   week_of: string;
@@ -33,28 +36,17 @@ function isValidIsoDate(value: string): boolean {
 }
 
 export function getCancunTodayDate(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function getWeekStart(date: Date): string {
-  const local = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const day = local.getDay();
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-  local.setDate(local.getDate() + diffToMonday);
-  return local.toISOString().split("T")[0];
+  const localDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const diffToMonday = date.getDay() === 0 ? -6 : 1 - date.getDay();
+  return shiftJournalDate(localDate, diffToMonday);
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function formatRange(weekOf: string): string {
@@ -148,7 +140,7 @@ async function generatePlanForDate(requestedDate: string) {
 
   await execFileAsync(BUN_BIN, ["--eval", script], {
     cwd: MEAL_PLANNER_ROOT,
-    env: { ...process.env, HOME: process.env.HOME || "/Users/moogs" },
+    env: process.env,
   });
 }
 
@@ -179,7 +171,56 @@ export async function getMealPlanData(requestedDate: string, options?: { forceRe
   }
 
   const weekOf = getWeekStart(new Date(`${requestedDate}T12:00:00`));
-  const { plan, updatedAt, grocerySections, source } = await ensurePlanArtifacts(requestedDate, weekOf, options?.forceRegenerate);
+  if (!existsSync(MEAL_PLANNER_ROOT)) {
+    return {
+      requestedDate,
+      weekOf,
+      displayRange: formatRange(weekOf),
+      generatedAt: new Date().toISOString(),
+      planUpdatedAt: null,
+      source: {
+        state: "not-configured",
+        message: "Meals needs the optional meal-planner workspace.",
+        recovery: "configure",
+      },
+      planSource: null,
+      highlight: null,
+      meals: [],
+      grocerySections: [],
+      groceryItemCount: 0,
+      groceryChecklist: [],
+      groceryCheckedCount: 0,
+      groceryRemainingCount: 0,
+    };
+  }
+
+  let artifacts: Awaited<ReturnType<typeof ensurePlanArtifacts>>;
+  try {
+    artifacts = await ensurePlanArtifacts(requestedDate, weekOf, options?.forceRegenerate);
+  } catch {
+    return {
+      requestedDate,
+      weekOf,
+      displayRange: formatRange(weekOf),
+      generatedAt: new Date().toISOString(),
+      planUpdatedAt: null,
+      source: {
+        state: "unavailable",
+        message: "The meal planner is configured but unavailable. Check its files and retry.",
+        recovery: "retry",
+      },
+      planSource: null,
+      highlight: null,
+      meals: [],
+      grocerySections: [],
+      groceryItemCount: 0,
+      groceryChecklist: [],
+      groceryCheckedCount: 0,
+      groceryRemainingCount: 0,
+    };
+  }
+
+  const { plan, updatedAt, grocerySections, source } = artifacts;
   const meals = plan.meals.map(({ day, meal }) => toMeal(day, meal));
   const highlightDay = new Date(`${requestedDate}T12:00:00`).toLocaleDateString("en-US", { weekday: "long" });
   const highlight = meals.find((meal) => meal.day === highlightDay) || meals[0] || null;
@@ -191,7 +232,12 @@ export async function getMealPlanData(requestedDate: string, options?: { forceRe
     displayRange: formatRange(plan.week_of),
     generatedAt: new Date().toISOString(),
     planUpdatedAt: updatedAt,
-    source,
+    source: {
+      state: meals.length > 0 ? "ready" : "empty",
+      message: meals.length > 0 ? "Meal plan loaded." : "The meal plan contains no meals.",
+      recovery: null,
+    },
+    planSource: source,
     highlight,
     meals,
     grocerySections,

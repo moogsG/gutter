@@ -3,27 +3,20 @@
 import Link from "next/link";
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, Clock3, MoonStar, ShoppingCart, Target } from "lucide-react";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGetEveningResetQuery } from "@/store/api/resetApi";
 import type { EveningResetTask } from "@/types";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function getCancunTodayDate(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function formatTime(value: string): string {
@@ -49,7 +42,7 @@ function TaskList({ tasks, empty, href }: { tasks: EveningResetTask[]; empty: st
 }
 
 export function EveningResetBoard({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {
-  const { data, isLoading, error, isFetching } = useGetEveningResetQuery(date);
+  const { data, isLoading, error, isFetching, refetch } = useGetEveningResetQuery(date);
 
   return (
     <div className="flex h-full flex-col overflow-auto">
@@ -66,6 +59,8 @@ export function EveningResetBoard({ date, onDateChange }: { date: string; onDate
         {!isLoading && error ? <FailureState /> : null}
         {!isLoading && data ? (
           <div className="mx-auto flex max-w-6xl flex-col gap-4">
+            <OptionalSourceNotice source={data.sources.calendar} onRetry={() => void refetch()} />
+            <OptionalSourceNotice source={data.sources.family} onRetry={() => void refetch()} />
             <section className="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/18 via-card to-secondary/10 p-5 shadow-[0_0_60px_rgba(255,61,154,0.08)]">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>

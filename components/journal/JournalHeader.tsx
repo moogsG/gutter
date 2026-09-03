@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronLeft, ChevronRight, Calendar, Palette, Menu, Search, Sparkles, Settings2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Calendar, Palette, Menu, Search, Sparkles, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -36,29 +36,18 @@ const themes = [
   { id: "dracula", label: "Dracula", preview: "bg-[#bd93f9]" },
 ];
 
-const navLinks = [
-  { href: "/", label: "Today" },
-  { href: "/tomorrow", label: "Tomorrow" },
-  { href: "/reset", label: "Reset" },
-  { href: "/meetings", label: "Meetings" },
-  { href: "/wip", label: "WIP" },
-  { href: "/projects", label: "Projects" },
-  { href: "/backlog", label: "Backlog" },
-  { href: "/radar", label: "Radar" },
-  { href: "/truth", label: "Truth" },
-  { href: "/sessions", label: "Sessions" },
-  { href: "/status", label: "Status" },
-  { href: "/linkedin", label: "LinkedIn" },
-  { href: "/health-cut", label: "Health" },
-  { href: "/habits", label: "Habits" },
-  { href: "/meal-plan", label: "Meals" },
-  { href: "/school", label: "School" },
-  { href: "/date-night", label: "Date Night" },
-  { href: "/chores", label: "Chores" },
+const journalLinks = [
   { href: "/month", label: "Monthly" },
   { href: "/future", label: "Future" },
   { href: "/collections", label: "Collections" },
-  { href: "/kanban", label: "Kanban" },
+  { href: "/migrate", label: "Migration" },
+];
+
+const moreGroups = [
+  { label: "Daily loop", links: [{ href: "/reset", label: "Close today" }, { href: "/tomorrow", label: "Open tomorrow" }] },
+  { label: "Review tools", links: [{ href: "/wip", label: "WIP" }, { href: "/backlog", label: "Backlog" }, { href: "/radar", label: "Radar" }, { href: "/status", label: "Status" }, { href: "/projects", label: "Projects" }, { href: "/truth", label: "Truth" }] },
+  { label: "Calendar & life", links: [{ href: "/meetings", label: "Meetings" }, { href: "/health-cut", label: "Health" }, { href: "/habits", label: "Habits" }, { href: "/meal-plan", label: "Meals" }, { href: "/school", label: "School" }, { href: "/date-night", label: "Date Night" }, { href: "/chores", label: "Chores" }] },
+  { label: "More", links: [{ href: "/linkedin", label: "LinkedIn" }, { href: "/sessions", label: "Sessions" }] },
 ];
 
 export function JournalHeader({
@@ -102,14 +91,14 @@ export function JournalHeader({
           {showDateNav ? (
             <>
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="sm" onClick={onPrevDay} className="w-8 h-8 p-0">
+                <Button aria-label="Previous day" variant="ghost" size="sm" onClick={onPrevDay} className="w-8 h-8 p-0">
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={onToday} className="h-8 px-2 sm:px-3">
+                <Button aria-label="Go to today" variant="outline" size="sm" onClick={onToday} className="h-8 px-2 sm:px-3">
                   <Calendar className="w-3.5 h-3.5 sm:mr-2" />
                   <span className="hidden sm:inline">Today</span>
                 </Button>
-                <Button variant="ghost" size="sm" onClick={onNextDay} className="w-8 h-8 p-0">
+                <Button aria-label="Next day" variant="ghost" size="sm" onClick={onNextDay} className="w-8 h-8 p-0">
                   <ChevronRight className="w-4 h-4" />
                 </Button>
               </div>
@@ -126,30 +115,46 @@ export function JournalHeader({
 
         <div className="flex items-center gap-1">
           {/* Desktop nav */}
-          <nav className="hidden md:flex gap-1">
-            {navLinks.map((link) => (
-              <Link key={link.href} href={link.href}>
-                <Button
-                  variant={pathname === link.href ? "default" : "ghost"}
-                  size="sm"
-                  className="h-8"
-                >
-                  {link.label}
+          <nav aria-label="Primary" className="hidden lg:flex gap-1">
+            <Button asChild variant={pathname === "/" ? "default" : "ghost"} size="sm" className="h-8">
+              <Link href="/" aria-current={pathname === "/" ? "page" : undefined}>Today</Link>
+            </Button>
+            <Button asChild variant={pathname === "/kanban" ? "default" : "ghost"} size="sm" className="h-8">
+              <Link href="/kanban" aria-current={pathname === "/kanban" ? "page" : undefined}>Review</Link>
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant={journalLinks.some((link) => link.href === pathname) ? "default" : "ghost"} size="sm" className="h-8">
+                  Journal <ChevronDown className="h-3.5 w-3.5" />
                 </Button>
-              </Link>
-            ))}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>Journal horizons</DropdownMenuLabel>
+                {journalLinks.map((link) => <DropdownMenuItem key={link.href} asChild><Link href={link.href}>{link.label}</Link></DropdownMenuItem>)}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant={moreGroups.some((group) => group.links.some((link) => link.href === pathname)) ? "default" : "ghost"} size="sm" className="h-8">
+                  More <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-[75vh] w-56 overflow-y-auto">
+                {moreGroups.map((group, index) => <div key={group.label}>{index > 0 ? <DropdownMenuSeparator /> : null}<DropdownMenuLabel>{group.label}</DropdownMenuLabel>{group.links.map((link) => <DropdownMenuItem key={link.href} asChild><Link href={link.href}>{link.label}</Link></DropdownMenuItem>)}</div>)}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </nav>
 
           {/* Mobile nav dropdown */}
           <DropdownMenu open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="md:hidden w-8 h-8 p-0">
+              <Button aria-label="Open navigation" variant="ghost" size="sm" className="lg:hidden w-8 h-8 p-0">
                 <Menu className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuContent align="end" className="max-h-[75vh] w-56 overflow-y-auto">
               <DropdownMenuLabel>Navigate</DropdownMenuLabel>
-              {navLinks.map((link) => (
+              {[{ href: "/", label: "Today" }, { href: "/kanban", label: "Review" }].map((link) => (
                 <DropdownMenuItem key={link.href} asChild>
                   <Link
                     href={link.href}
@@ -163,6 +168,10 @@ export function JournalHeader({
                   </Link>
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Journal horizons</DropdownMenuLabel>
+              {journalLinks.map((link) => <DropdownMenuItem key={link.href} asChild><Link href={link.href} onClick={() => setMobileNavOpen(false)}>{link.label}</Link></DropdownMenuItem>)}
+              {moreGroups.map((group) => <div key={group.label}><DropdownMenuSeparator /><DropdownMenuLabel>{group.label}</DropdownMenuLabel>{group.links.map((link) => <DropdownMenuItem key={link.href} asChild><Link href={link.href} onClick={() => setMobileNavOpen(false)}>{link.label}</Link></DropdownMenuItem>)}</div>)}
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Settings</DropdownMenuLabel>
               <DropdownMenuItem asChild>
@@ -194,6 +203,7 @@ export function JournalHeader({
                 "transition-all duration-200"
               )}
               onClick={() => onCaptureChange?.(true)}
+              aria-label="Capture entry"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Capture</span>
@@ -210,6 +220,7 @@ export function JournalHeader({
                 new KeyboardEvent("keydown", { key: "k", metaKey: true })
               );
             }}
+            aria-label="Search and commands"
           >
             <Search className="w-3.5 h-3.5" />
             <kbd className="inline-flex h-5 items-center gap-0.5 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium">
@@ -220,7 +231,7 @@ export function JournalHeader({
           {/* Theme picker */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="w-8 h-8 p-0">
+              <Button aria-label="Choose theme" variant="ghost" size="sm" className="w-8 h-8 p-0">
                 <Palette className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>

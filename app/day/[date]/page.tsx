@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { EntryInput } from "@/components/journal/EntryInput";
 import { EntryItem } from "@/components/journal/EntryItem";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -25,18 +26,14 @@ import {
 	useUpdateEntryMutation,
 } from "@/store/api/journalApi";
 import type { Signifier } from "@/types/journal";
+import type { OptionalSourceState } from "@/types";
 import { toast } from "sonner";
-
-function formatDate(date: Date): string {
-	return date.toISOString().split("T")[0];
-}
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 function getMigrateTargetDate(viewDate: string): string {
-	const today = formatDate(new Date());
+	const today = getJournalDate();
 	if (viewDate === today) {
-		const tomorrow = new Date();
-		tomorrow.setDate(tomorrow.getDate() + 1);
-		return formatDate(tomorrow);
+		return shiftJournalDate(today, 1);
 	}
 	return today;
 }
@@ -293,6 +290,8 @@ export default function DayDetailPage() {
 
 	const [events, setEvents] = useState<CalendarEvent[]>([]);
 	const [meetingPreps, setMeetingPreps] = useState<MeetingPrep[]>([]);
+	const [calendarSource, setCalendarSource] = useState<OptionalSourceState | null>(null);
+	const [meetingPrepSource, setMeetingPrepSource] = useState<OptionalSourceState | null>(null);
 	const [_loading, setLoading] = useState(true);
 
 	// Use RTK Query for entries
@@ -302,7 +301,7 @@ export default function DayDetailPage() {
 	const [deleteEntry] = useDeleteEntryMutation();
 	const [migrateEntries] = useMigrateEntriesMutation();
 
-	const loadDayData = async () => {
+	const loadDayData = useCallback(async () => {
 		setLoading(true);
 		try {
 			// Fetch calendar events
@@ -311,7 +310,8 @@ export default function DayDetailPage() {
 			);
 			if (eventsRes.ok) {
 				const eventsData = await eventsRes.json();
-				setEvents(Array.isArray(eventsData) ? eventsData : []);
+				setEvents(Array.isArray(eventsData) ? eventsData : eventsData.events || []);
+				setCalendarSource(Array.isArray(eventsData) ? null : eventsData.source || null);
 			}
 
 			// Fetch meeting preps
@@ -319,13 +319,14 @@ export default function DayDetailPage() {
 			if (prepsRes.ok) {
 				const prepsData = await prepsRes.json();
 				setMeetingPreps(prepsData.meetings || []);
+				setMeetingPrepSource(prepsData.source || null);
 			}
 		} catch (error) {
 			console.error("Failed to load day data:", error);
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [date]);
 
 	useEffect(() => {
 		loadDayData();
@@ -342,6 +343,7 @@ export default function DayDetailPage() {
 				if (!res.ok) return;
 				const data = await res.json();
 				setMeetingPreps(data.meetings || []);
+				setMeetingPrepSource(data.source || null);
 			} catch {}
 		}, 4000);
 
@@ -349,21 +351,17 @@ export default function DayDetailPage() {
 	}, [meetingPreps]);
 
 	const handlePrevDay = () => {
-		const currentDate = new Date(`${date}T12:00:00`);
-		currentDate.setDate(currentDate.getDate() - 1);
-		const newDate = currentDate.toISOString().split("T")[0];
+		const newDate = shiftJournalDate(date, -1);
 		router.push(`/day/${newDate}`);
 	};
 
 	const handleNextDay = () => {
-		const currentDate = new Date(`${date}T12:00:00`);
-		currentDate.setDate(currentDate.getDate() + 1);
-		const newDate = currentDate.toISOString().split("T")[0];
+		const newDate = shiftJournalDate(date, 1);
 		router.push(`/day/${newDate}`);
 	};
 
 	const handleToday = () => {
-		const today = new Date().toISOString().split("T")[0];
+		const today = getJournalDate();
 		router.push(`/day/${today}`);
 	};
 
@@ -452,8 +450,8 @@ export default function DayDetailPage() {
 	);
 
 	const handleKill = useCallback(
-		(id: string) => {
-			updateEntry({ id, status: "killed", _date: date });
+		async (id: string) => {
+			await updateEntry({ id, status: "killed", _date: date }).unwrap();
 		},
 		[updateEntry, date],
 	);
@@ -507,6 +505,13 @@ export default function DayDetailPage() {
 						</span>
 					</div>
 				</div>
+
+				{calendarSource ? (
+					<OptionalSourceNotice source={calendarSource} onRetry={() => void loadDayData()} />
+				) : null}
+				{meetingPrepSource && meetingPrepSource.message !== calendarSource?.message ? (
+					<OptionalSourceNotice source={meetingPrepSource} onRetry={() => void loadDayData()} />
+				) : null}
 
 				<Separator />
 

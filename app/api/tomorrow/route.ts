@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
-import { readFile, readdir } from "node:fs/promises";
-import { homedir } from "node:os";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   findSectionLines,
@@ -8,13 +8,15 @@ import {
   getFamilyData,
   getMeetings,
   getRequestedDate,
+  readLatestWorkspaceReport,
 } from "@/lib/launchpad-data";
+import { getOpenClawWorkspacePath } from "@/lib/paths";
 import type {
   TomorrowLaunchpadData,
   TomorrowLaunchpadTask,
 } from "@/types";
 
-const WORKSPACE_ROOT = join(homedir(), ".openclaw", "workspace");
+const WORKSPACE_ROOT = getOpenClawWorkspacePath();
 
 function parseTaskLine(line: string): TomorrowLaunchpadTask {
   const match = line.match(/^- (.+?) \[([^\]]+)\]\[([^\]]+)\]\[([^\]]+)\]\[([^\]]+)\]$/);
@@ -41,18 +43,14 @@ function parseTaskLine(line: string): TomorrowLaunchpadTask {
   };
 }
 
-async function readLatestReport(dirName: string): Promise<string | null> {
-  const dir = join(WORKSPACE_ROOT, dirName, "reports");
-  const files = (await readdir(dir)).filter((file) => file.endsWith(".md")).sort();
-  const latest = files.at(-1);
-  if (!latest) return null;
-  return readFile(join(dir, latest), "utf8");
-}
-
 async function getFocusData() {
-  const markdown = await readLatestReport("focus-reset");
+  const report = await readLatestWorkspaceReport("focus-reset");
+  const markdown = report.markdown;
   if (!markdown) {
-    return { pickOne: null, topThree: [], boardLoad: null };
+    return {
+      data: { pickOne: null, topThree: [], boardLoad: null },
+      reportState: report.state,
+    };
   }
 
   const pickOne = findSectionLines(markdown, "## Pick One").find((line) => line.startsWith("- "));
@@ -68,14 +66,17 @@ async function getFocusData() {
   };
 
   return {
-    pickOne: pickOne ? parseTaskLine(pickOne) : null,
-    topThree,
-    boardLoad: {
-      open: readCount("Open"),
-      inProgress: readCount("In progress"),
-      blocked: readCount("Blocked"),
-      actionable: readCount("Actionable after filtering"),
+    data: {
+      pickOne: pickOne ? parseTaskLine(pickOne) : null,
+      topThree,
+      boardLoad: {
+        open: readCount("Open"),
+        inProgress: readCount("In progress"),
+        blocked: readCount("Blocked"),
+        actionable: readCount("Actionable after filtering"),
+      },
     },
+    reportState: report.state,
   };
 }
 
@@ -127,7 +128,7 @@ async function getSystemHealth(): Promise<TomorrowLaunchpadData["systemHealth"]>
 export async function GET(request: NextRequest) {
   try {
     const requestedDate = getRequestedDate(new URL(request.url).searchParams.get("date"), "tomorrow");
-    const [focus, meetings, family, systemHealth] = await Promise.all([
+    const [focus, meetingData, familyData, systemHealth] = await Promise.all([
       getFocusData(),
       getMeetings(requestedDate),
       getFamilyData(requestedDate),
@@ -135,12 +136,33 @@ export async function GET(request: NextRequest) {
     ]);
 
     const payload: TomorrowLaunchpadData = {
+      sources: {
+        focus: existsSync(WORKSPACE_ROOT)
+          ? focus.reportState === "unavailable"
+            ? {
+                state: "unavailable",
+                message: "Focus reports are unavailable. Check OPENCLAW_WORKSPACE_PATH and retry.",
+                recovery: "retry",
+              }
+            : {
+                state: focus.data.pickOne || focus.data.topThree.length > 0 ? "ready" : "empty",
+                message: focus.data.pickOne || focus.data.topThree.length > 0 ? "Focus report loaded." : "No focus report is available yet.",
+                recovery: null,
+              }
+          : {
+              state: "not-configured",
+              message: "Set OPENCLAW_WORKSPACE_PATH to load focus reports.",
+              recovery: "configure",
+            },
+        calendar: meetingData.source,
+        family: familyData.source,
+      },
       requestedDate,
       displayDate: getDisplayDate(requestedDate),
       generatedAt: new Date().toISOString(),
-      focus,
-      meetings,
-      family,
+      focus: focus.data,
+      meetings: meetingData.meetings,
+      family: familyData.data,
       systemHealth,
     };
 

@@ -52,7 +52,9 @@ function LoginForm() {
 				</div>
 
 				<form onSubmit={handleSubmit} className="space-y-4">
+					<label htmlFor="password" className="sr-only">Password</label>
 					<input
+						id="password"
 						type="password"
 						value={password}
 						onChange={(e) => setPassword(e.target.value)}
@@ -62,15 +64,16 @@ function LoginForm() {
 					/>
 
 					{error && (
-						<p className="text-sm text-destructive text-center">{error}</p>
+						<p role="alert" className="text-sm text-destructive text-center">{error}</p>
 					)}
 
 					<button
 						type="submit"
 						disabled={loading || !password}
+						aria-busy={loading}
 						className="w-full bg-primary text-primary-foreground rounded-lg px-4 py-3 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 					>
-						{loading ? "..." : "enter"}
+						{loading ? "Signing in…" : "Sign in"}
 					</button>
 				</form>
 			</div>

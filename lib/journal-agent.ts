@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { createCalendarEvent } from "@/lib/calendar";
 import { getDb } from "@/lib/db";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 import type { EntryStatus, JournalEntry, Signifier, TaskLane, TaskPriority } from "@/types/journal";
 
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
@@ -165,18 +166,13 @@ export function saveConversationMessage(sessionId: string, date: string, role: s
 }
 
 function buildUserPrompt(command: string, context?: JournalAgentContext): string {
-  const date = context?.currentDate || new Date().toISOString().split("T")[0];
+  const date = context?.currentDate || getJournalDate();
   const page = context?.currentPage || "daily";
-  const d = new Date(`${date}T12:00:00`);
-  const yesterday = new Date(d);
-  yesterday.setDate(d.getDate() - 1);
-  const tomorrow = new Date(d);
-  tomorrow.setDate(d.getDate() + 1);
   const conversation = (context?.recentConversation || [])
     .map((msg) => `${msg.role}: ${msg.content}`)
     .join("\n");
 
-  return `Current date: ${date} (yesterday: ${yesterday.toISOString().split("T")[0]}, tomorrow: ${tomorrow.toISOString().split("T")[0]})
+  return `Current date: ${date} (yesterday: ${shiftJournalDate(date, -1)}, tomorrow: ${shiftJournalDate(date, 1)})
 Current page: ${page}
 Current month: ${date.substring(0, 7)}
 Session ID: ${context?.sessionId || "none"}

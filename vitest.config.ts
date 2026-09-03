@@ -10,7 +10,7 @@ export default defineConfig({
     fileParallelism: false,
     maxWorkers: 1,
     setupFiles: ["./vitest.setup.ts"],
-    exclude: ["e2e/**", "node_modules/**"],
+    exclude: ["e2e/**", "node_modules/**", "**/.worktrees/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],

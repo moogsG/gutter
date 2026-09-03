@@ -43,7 +43,7 @@ The first time you run `accli`, macOS will prompt for Calendar access.
 
 **Test access:**
 ```bash
-npx @joargp/accli calendars list
+npx @joargp/accli calendars
 ```
 
 **Expected output:**
@@ -66,7 +66,7 @@ School
 ## Step 3: Find Your Calendar Names
 
 ```bash
-npx @joargp/accli calendars list
+npx @joargp/accli calendars
 ```
 
 Note the **exact names** (case-sensitive).
@@ -279,7 +279,7 @@ npx @joargp/accli --version
 1. **System Settings → Privacy & Security → Calendars**
 2. Check Terminal (or iTerm, Warp, etc.)
 3. Restart terminal
-4. Test: `npx @joargp/accli calendars list`
+4. Test: `npx @joargp/accli calendars`
 
 ### Events not appearing
 
@@ -291,7 +291,7 @@ npx @joargp/accli --version
 **Debug:**
 ```bash
 # List calendar names
-npx @joargp/accli calendars list
+npx @joargp/accli calendars
 
 # Fetch events directly
 npx @joargp/accli events "Calendar" --from 2026-03-01 --to 2026-03-31 --json
@@ -385,7 +385,7 @@ standup 9am daily
 If accli installed in non-standard location:
 
 ```bash
-ACCLI_CMD=/usr/local/bin/accli
+CALENDAR_CLI=/usr/local/bin/accli
 ```
 
 ### Retry Logic

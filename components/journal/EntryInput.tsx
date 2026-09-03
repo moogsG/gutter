@@ -19,6 +19,13 @@ interface EntryInputProps {
 }
 
 const signifiers: Signifier[] = ["task", "appointment", "note", "memory", "important"];
+const signifierLabels: Record<Signifier, string> = {
+  task: "Task",
+  appointment: "Appointment",
+  note: "Note",
+  memory: "Memory",
+  important: "Important",
+};
 
 type InputMode = "quick" | "command";
 
@@ -148,6 +155,8 @@ export function EntryInput({ date, onSubmit }: EntryInputProps) {
           variant={mode === "quick" ? "default" : "ghost"}
           size="sm"
           onClick={() => setMode("quick")}
+          aria-label="Quick entry"
+          aria-pressed={mode === "quick"}
           className={cn(
             "h-7 px-2 sm:px-3 text-xs shrink-0",
             mode === "quick" && "bg-primary/20 hover:bg-primary/30"
@@ -161,6 +170,8 @@ export function EntryInput({ date, onSubmit }: EntryInputProps) {
           variant={mode === "command" ? "default" : "ghost"}
           size="sm"
           onClick={() => setMode("command")}
+          aria-label="Natural language command"
+          aria-pressed={mode === "command"}
           className={cn(
             "h-7 px-2 sm:px-3 text-xs shrink-0",
             mode === "command" && "bg-accent/20 hover:bg-accent/30"
@@ -181,6 +192,8 @@ export function EntryInput({ date, onSubmit }: EntryInputProps) {
                 variant={selectedSignifier === sig ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setSelectedSignifier(sig)}
+                aria-label={signifierLabels[sig]}
+                aria-pressed={selectedSignifier === sig}
                 className={cn(
                   "w-7 h-7 p-0 shrink-0",
                   selectedSignifier === sig && "bg-primary/20 hover:bg-primary/30"
@@ -208,10 +221,11 @@ export function EntryInput({ date, onSubmit }: EntryInputProps) {
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isProcessing}
+            aria-label={mode === "command" ? "Journal command" : "Journal entry"}
             placeholder={
               mode === "command"
-                ? 'Natural language: "buy milk", "create a Books collection"'
-                : "Type / for shortcuts, ⌘K for commands"
+                ? "Describe what you want to add or organize…"
+                : "Add a task or note…"
             }
             className={cn(
               "flex-1 h-9 bg-background border-border text-sm",

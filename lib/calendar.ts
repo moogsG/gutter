@@ -1,5 +1,7 @@
 import { execSync } from "node:child_process";
 import { env } from "@/lib/env";
+import { getJournalDate } from "@/lib/journal-date";
+import type { OptionalSourceState } from "@/types";
 
 // Configuration
 export const CALENDAR_ENABLED = env.calendarEnabled;
@@ -129,6 +131,55 @@ export interface CalendarEventParams {
 	description?: string;
 }
 
+export function buildCalendarEventsCommand(
+	cli: string,
+	calendarName: string,
+	from: string,
+	to: string,
+): string {
+	return `${cli} events "${calendarName}" --from ${from}T00:00:00 --to ${to}T23:59:59 --json`;
+}
+
+export function buildCreateCalendarEventCommand(
+	cli: string,
+	params: CalendarEventParams,
+): string {
+	const calName = params.calendar
+		? CALENDAR_ALIASES[params.calendar.toLowerCase()] || params.calendar
+		: DEFAULT_CALENDAR;
+	const args: string[] = [
+		cli,
+		"create",
+		`--calendar-name "${calName}"`,
+		`--summary "${params.summary.replace(/"/g, '\\"')}"`,
+	];
+
+	if (params.allDay || !params.startTime) {
+		args.push(`--start "${params.date}"`);
+		args.push(`--end "${params.date}"`);
+		args.push("--all-day");
+	} else {
+		args.push(`--start "${params.date}T${params.startTime}"`);
+		if (params.endTime) {
+			args.push(`--end "${params.date}T${params.endTime}"`);
+		} else {
+			const [h, m] = params.startTime.split(":").map(Number);
+			const endH = String(h + 1).padStart(2, "0");
+			args.push(`--end "${params.date}T${endH}:${String(m).padStart(2, "0")}"`);
+		}
+	}
+
+	if (params.location) {
+		args.push(`--location "${params.location.replace(/"/g, '\\"')}"`);
+	}
+	if (params.description) {
+		args.push(`--description "${params.description.replace(/"/g, '\\"')}"`);
+	}
+	args.push("--json");
+
+	return args.join(" ");
+}
+
 // Event cache
 let eventCache: {
 	data: CalendarEvent[];
@@ -144,11 +195,16 @@ const EVENT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 export async function fetchCalendarEvents(
 	from: string,
 	to: string,
-): Promise<{ ok: boolean; data?: CalendarEvent[]; error?: string }> {
+): Promise<{ ok: boolean; data?: CalendarEvent[]; error?: string; source: OptionalSourceState }> {
 	if (!CALENDAR_ENABLED) {
 		return {
 			ok: false,
 			error: "Calendar integration disabled",
+			source: {
+				state: "not-configured",
+				message: "Calendar is disabled. Enable it to load meetings.",
+				recovery: "configure",
+			},
 		};
 	}
 
@@ -159,7 +215,15 @@ export async function fetchCalendarEvents(
 		eventCache.key === cacheKey &&
 		Date.now() - eventCache.timestamp < EVENT_CACHE_TTL
 	) {
-		return { ok: true, data: eventCache.data };
+		return {
+			ok: true,
+			data: eventCache.data,
+			source: {
+				state: eventCache.data.length > 0 ? "ready" : "empty",
+				message: eventCache.data.length > 0 ? "Calendar events loaded." : "No calendar events in this range.",
+				recovery: null,
+			},
+		};
 	}
 
 	try {
@@ -170,7 +234,7 @@ export async function fetchCalendarEvents(
 		const settledCalendars = await Promise.all(
 			calendarNames.map(async (calName) => {
 				try {
-					const cmd = `${ACCLI} events "${calName}" --from ${from}T00:00:00 --to ${to}T23:59:59 --json`;
+					const cmd = buildCalendarEventsCommand(ACCLI, calName, from, to);
 					const output = await executeWithRetry(cmd, {
 						attempts: READ_RETRY_ATTEMPTS,
 						timeoutMs: READ_TIMEOUT_MS,
@@ -219,9 +283,25 @@ export async function fetchCalendarEvents(
 
 		if (allEvents.length === 0 && failedCalendars.length === calendarNames.length) {
 			if (previousCache) {
-				return { ok: true, data: previousCache.data };
+				return {
+					ok: true,
+					data: previousCache.data,
+					source: {
+						state: "unavailable",
+						message: "Calendar is unavailable; showing cached events.",
+						recovery: "retry",
+					},
+				};
 			}
-			return { ok: false, error: calendarCache.lastError || "Calendar unavailable" };
+			return {
+				ok: false,
+				error: calendarCache.lastError || "Calendar unavailable",
+				source: {
+					state: "unavailable",
+					message: "Calendar could not be reached. Check the CLI and retry.",
+					recovery: "retry",
+				},
+			};
 		}
 
 		eventCache = {
@@ -230,15 +310,39 @@ export async function fetchCalendarEvents(
 			key: cacheKey,
 		};
 
-		return { ok: true, data: allEvents };
+		return {
+			ok: true,
+			data: allEvents,
+			source: {
+				state: allEvents.length > 0 ? "ready" : "empty",
+				message: allEvents.length > 0 ? "Calendar events loaded." : "No calendar events in this range.",
+				recovery: null,
+			},
+		};
 	} catch (error) {
 		// If we have stale cache, return that
 		if (eventCache && eventCache.key === cacheKey) {
-			return { ok: true, data: eventCache.data };
+			return {
+				ok: true,
+				data: eventCache.data,
+				source: {
+					state: "unavailable",
+					message: "Calendar is unavailable; showing cached events.",
+					recovery: "retry",
+				},
+			};
 		}
 
 		const errMsg = error instanceof Error ? error.message : String(error);
-		return { ok: false, error: errMsg };
+		return {
+			ok: false,
+			error: errMsg,
+			source: {
+				state: "unavailable",
+				message: "Calendar could not be reached. Check the CLI and retry.",
+				recovery: "retry",
+			},
+		};
 	}
 }
 
@@ -246,7 +350,7 @@ export async function fetchCalendarEvents(
  * Get today's calendar events
  */
 export async function getTodayEvents(): Promise<CalendarEvent[]> {
-	const today = new Date().toISOString().split('T')[0];
+	const today = getJournalDate();
 	const result = await fetchCalendarEvents(today, today);
 	return result.data || [];
 }
@@ -273,18 +377,7 @@ export async function createCalendarEvent(
 		};
 	}
 
-	const {
-		summary,
-		date,
-		startTime,
-		endTime,
-		allDay,
-		calendar,
-		location,
-		description,
-	} = params;
-
-	if (!summary || !date) {
+	if (!params.summary || !params.date) {
 		return {
 			ok: false,
 			error: "Missing required fields: summary, date",
@@ -293,45 +386,10 @@ export async function createCalendarEvent(
 
 	try {
 		// Resolve calendar name
-		const calName = calendar
-			? CALENDAR_ALIASES[calendar.toLowerCase()] || calendar
+		const calName = params.calendar
+			? CALENDAR_ALIASES[params.calendar.toLowerCase()] || params.calendar
 			: DEFAULT_CALENDAR;
-
-		// Build accli command
-		const args: string[] = [
-			ACCLI,
-			"create",
-			`--calendar-name "${calName}"`,
-			`--summary "${summary.replace(/"/g, '\\"')}"`,
-		];
-
-		if (allDay || !startTime) {
-			args.push(`--start "${date}"`);
-			args.push(`--end "${date}"`);
-			args.push("--all-day");
-		} else {
-			args.push(`--start "${date}T${startTime}"`);
-			// Default to 1 hour if no end time
-			if (endTime) {
-				args.push(`--end "${date}T${endTime}"`);
-			} else {
-				// Parse start and add 1 hour
-				const [h, m] = startTime.split(":").map(Number);
-				const endH = String(h + 1).padStart(2, "0");
-				args.push(`--end "${date}T${endH}:${String(m).padStart(2, "0")}"`);
-			}
-		}
-
-		if (location) {
-			args.push(`--location "${location.replace(/"/g, '\\"')}"`);
-		}
-		if (description) {
-			args.push(`--description "${description.replace(/"/g, '\\"')}"`);
-		}
-
-		args.push("--json");
-
-		const cmd = args.join(" ");
+		const cmd = buildCreateCalendarEventCommand(ACCLI, params);
 
 		// Execute with retry logic
 		const output = await executeWithRetry(cmd);

@@ -3,22 +3,17 @@
 import { CheckCircle2, Home, Loader2, RotateCcw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { getJournalDate } from "@/lib/journal-date";
 import { useGetChoreBoardQuery, useUpdateChoreBoardMutation } from "@/store/api/choresApi";
 
 function getCancunTodayDate() {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function extractErrorMessage(error: unknown) {
@@ -31,8 +26,9 @@ function extractErrorMessage(error: unknown) {
 }
 
 export function ChoreBoard() {
-  const { data, isLoading, error, isFetching } = useGetChoreBoardQuery();
+  const { data, isLoading, error, isFetching, refetch } = useGetChoreBoardQuery();
   const [updateChoreBoard, { isLoading: isSaving }] = useUpdateChoreBoardMutation();
+  const sourceUnavailable = data?.source.state === "not-configured" || data?.source.state === "unavailable";
 
   const runAction = async (action: "complete" | "pick" | "reset" | "reopen", selection?: string, success?: string) => {
     try {
@@ -66,6 +62,7 @@ export function ChoreBoard() {
         {!isLoading && error ? <FailureState /> : null}
         {!isLoading && data ? (
           <div className="mx-auto flex max-w-6xl flex-col gap-4">
+            <OptionalSourceNotice source={data.source} onRetry={() => void refetch()} />
             <section className="rounded-[2rem] border border-emerald-500/20 bg-[linear-gradient(135deg,rgba(16,185,129,0.18),rgba(255,255,255,0.02),rgba(245,158,11,0.12))] p-5 shadow-[0_0_60px_rgba(16,185,129,0.1)]">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -84,7 +81,7 @@ export function ChoreBoard() {
                     variant="outline"
                     className="gap-2 border-emerald-500/30 bg-background/40"
                     onClick={() => void runAction("pick", undefined, "Pair refreshed")}
-                    disabled={isSaving}
+                    disabled={isSaving || sourceUnavailable}
                   >
                     {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                     Refresh pair
@@ -100,7 +97,7 @@ export function ChoreBoard() {
                         "Started a fresh chore cycle",
                       )
                     }
-                    disabled={isSaving}
+                    disabled={isSaving || sourceUnavailable}
                   >
                     <RotateCcw className="h-4 w-4" />
                     Reset cycle
@@ -131,7 +128,7 @@ export function ChoreBoard() {
                               `${choice.name} cleared`,
                             )
                           }
-                          disabled={isSaving}
+                          disabled={isSaving || sourceUnavailable}
                         >
                           <CheckCircle2 className="mr-2 h-4 w-4" />
                           Mark done
@@ -191,7 +188,7 @@ export function ChoreBoard() {
                                 `${chore.name} reopened`,
                               )
                             }
-                            disabled={isSaving}
+                            disabled={isSaving || sourceUnavailable}
                           >
                             Undo
                           </Button>
@@ -206,7 +203,7 @@ export function ChoreBoard() {
                                 `${chore.name} cleared`,
                               )
                             }
-                            disabled={isSaving}
+                            disabled={isSaving || sourceUnavailable}
                           >
                             Mark done
                           </Button>

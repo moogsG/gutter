@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useCleanupHealthCutBacklogMutation, useGetHealthCutQuery, useSubmitHealthCutMealLogMutation, useSubmitHealthCutPrepLockMutation, useUpdateEntryMutation } from "@/store/api/journalApi";
 import type { HealthCutCategory, HealthCutStatus } from "@/types";
 import { toast } from "sonner";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 const CATEGORY_META: Record<HealthCutCategory, { label: string; icon: typeof Flame }> = {
   omad: { label: "OMAD", icon: Flame },
@@ -25,20 +26,11 @@ const CATEGORY_META: Record<HealthCutCategory, { label: string; icon: typeof Fla
 };
 
 function getCancunTodayDate(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function toneForStatus(status: HealthCutStatus): string {

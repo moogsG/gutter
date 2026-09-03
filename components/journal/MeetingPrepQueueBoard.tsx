@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, ArrowUpRight, CalendarDays, CheckCircle2, Clock3, Eye, FileCheck2, Loader2, NotebookTabs, Sparkles } from "lucide-react";
 import { MeetingDrawer } from "@/components/meeting/MeetingDrawer";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,22 +13,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useGetMeetingPrepQueueQuery, useRequestPrepMutation } from "@/store/api/meetingPrepApi";
 import type { MeetingPrep, MeetingPrepQueueItem } from "@/types";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 function getCancunTodayDate(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function formatMeetingTime(value: string): string {
@@ -119,7 +112,7 @@ function QueueSection({
 }
 
 export function MeetingPrepQueueBoard({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {
-  const { data, isLoading, error, isFetching } = useGetMeetingPrepQueueQuery(date);
+  const { data, isLoading, error, isFetching, refetch } = useGetMeetingPrepQueueQuery(date);
   const [requestPrep] = useRequestPrepMutation();
   const [activeMeeting, setActiveMeeting] = useState<MeetingPrepQueueItem | null>(null);
   const [preppingId, setPreppingId] = useState<string | null>(null);
@@ -132,6 +125,7 @@ export function MeetingPrepQueueBoard({ date, onDateChange }: { date: string; on
         title: meeting.title,
         time: meeting.startDate,
         calendar: meeting.calendar,
+        occurrenceDate: meeting.occurrenceDate,
       }).unwrap();
     } finally {
       setPreppingId(null);
@@ -169,6 +163,7 @@ export function MeetingPrepQueueBoard({ date, onDateChange }: { date: string; on
         {!isLoading && error ? <FailureState /> : null}
         {!isLoading && data ? (
           <div className="mx-auto flex max-w-6xl flex-col gap-4">
+            <OptionalSourceNotice source={data.source} onRetry={() => void refetch()} />
             <section className="rounded-[2rem] border border-primary/20 bg-[linear-gradient(135deg,rgba(255,61,154,0.16),rgba(255,255,255,0.02),rgba(56,189,248,0.08))] p-5 shadow-[0_0_60px_rgba(255,61,154,0.08)]">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>

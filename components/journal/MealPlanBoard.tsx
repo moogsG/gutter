@@ -3,6 +3,7 @@
 import { CalendarDays, ChefHat, Loader2, RefreshCcw, ShoppingBasket } from "lucide-react";
 import { toast } from "sonner";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { GroceryChecklistCard } from "@/components/journal/GroceryChecklistCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,26 +15,18 @@ import {
   useRegenerateMealPlanMutation,
   useToggleMealChecklistItemMutation,
 } from "@/store/api/mealPlanApi";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function getCancunTodayDate(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 export function MealPlanBoard({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {
-  const { data, isLoading, error, isFetching } = useGetMealPlanQuery(date);
+  const { data, isLoading, error, isFetching, refetch } = useGetMealPlanQuery(date);
   const [regenerateMealPlan, { isLoading: isRegenerating }] = useRegenerateMealPlanMutation();
   const [toggleMealChecklistItem, { isLoading: isChecklistSaving }] = useToggleMealChecklistItemMutation();
   const [clearMealChecklist, { isLoading: isChecklistClearing }] = useClearMealChecklistMutation();
@@ -75,6 +68,7 @@ export function MealPlanBoard({ date, onDateChange }: { date: string; onDateChan
         {!isLoading && error ? <FailureState /> : null}
         {!isLoading && data ? (
           <div className="mx-auto flex max-w-6xl flex-col gap-4">
+            <OptionalSourceNotice source={data.source} onRetry={() => void refetch()} />
             <section className="rounded-[2rem] border border-chart-2/20 bg-[linear-gradient(135deg,rgba(127,225,179,0.18),rgba(255,255,255,0.02),rgba(244,187,68,0.12))] p-5 shadow-[0_0_60px_rgba(127,225,179,0.12)]">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -125,7 +119,7 @@ export function MealPlanBoard({ date, onDateChange }: { date: string; onDateChan
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {isFetching ? "Refreshing live..." : `Plan source: ${data.source} • Updated ${new Date(data.planUpdatedAt || data.generatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`}
+                    {isFetching ? "Refreshing live..." : `Plan source: ${data.planSource || data.source.state} • Updated ${new Date(data.planUpdatedAt || data.generatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`}
                   </p>
                 </CardContent>
               </Card>

@@ -2,14 +2,19 @@
 
 import { useState } from "react";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { FutureLogEntryItem } from "@/components/journal/FutureLogEntryItem";
 import { SignifierIcon } from "@/components/journal/SignifierIcon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
 	useCreateFutureLogEntryMutation,
+	useDeleteFutureLogEntryMutation,
 	useGetFutureLogQuery,
+	useMarkFutureLogEntryMigratedMutation,
+	useUpdateFutureLogEntryMutation,
 } from "@/store/api/journalApi";
+import { getJournalDate } from "@/lib/journal-date";
 import type { Signifier } from "@/types/journal";
 
 const signifiers: Signifier[] = ["task", "appointment", "note"];
@@ -18,21 +23,46 @@ export default function FutureLogPage() {
 	const [selectedSignifier, setSelectedSignifier] = useState<Signifier>("task");
 	const [targetMonth, setTargetMonth] = useState("");
 	const [text, setText] = useState("");
+	const [createError, setCreateError] = useState<string | null>(null);
 
-	const { data: entries = [] } = useGetFutureLogQuery();
-	const [createEntry] = useCreateFutureLogEntryMutation();
+	const {
+		data: entries = [],
+		isError: isFutureLogError,
+		isFetching: isFutureLogFetching,
+		refetch: refetchFutureLog,
+	} = useGetFutureLogQuery();
+	const [createEntry, { isLoading: isCreating }] = useCreateFutureLogEntryMutation();
+	const [updateFutureEntry] = useUpdateFutureLogEntryMutation();
+	const [markFutureEntryMigrated] = useMarkFutureLogEntryMigratedMutation();
+	const [deleteFutureEntry] = useDeleteFutureLogEntryMutation();
 
-	const handleSubmit = (e: React.FormEvent) => {
+	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!text.trim() || !targetMonth) return;
 
-		createEntry({
-			target_month: targetMonth,
-			signifier: selectedSignifier,
-			text: text.trim(),
-		});
+		setCreateError(null);
+		try {
+			await createEntry({
+				target_month: targetMonth,
+				signifier: selectedSignifier,
+				text: text.trim(),
+			}).unwrap();
+			setText("");
+		} catch {
+			setCreateError("Could not add the future entry. Your draft is still here.");
+		}
+	};
 
-		setText("");
+	const handleUpdate = async (entry: Parameters<typeof updateFutureEntry>[0]) => {
+		await updateFutureEntry(entry).unwrap();
+	};
+
+	const handleMarkMigrated = async (id: string) => {
+		await markFutureEntryMigrated(id).unwrap();
+	};
+
+	const handleDelete = async (id: string) => {
+		await deleteFutureEntry(id).unwrap();
 	};
 
 	// Group entries by month
@@ -51,7 +81,7 @@ export default function FutureLogPage() {
 	return (
 		<>
 			<JournalHeader
-				date={new Date().toISOString().split("T")[0]}
+				date={getJournalDate()}
 				onPrevDay={() => {}}
 				onNextDay={() => {}}
 				onToday={() => {}}
@@ -99,19 +129,38 @@ export default function FutureLogPage() {
 									placeholder="What do you want to remember?"
 									className="h-9"
 								/>
+								{createError && (
+									<p role="alert" className="text-sm text-destructive">{createError}</p>
+								)}
 								<Button
 									type="submit"
-									disabled={!text.trim() || !targetMonth}
+									disabled={!text.trim() || !targetMonth || isCreating}
 									size="sm"
 									className="w-full sm:w-auto"
 								>
-									Add Entry
+									{createError ? "Try again" : isCreating ? "Adding…" : "Add Entry"}
 								</Button>
 							</form>
 						</CardContent>
 					</Card>
 
-					{sortedMonths.length === 0 ? (
+					{isFutureLogError ? (
+						<Card>
+							<CardContent className="space-y-3 py-10 text-center sm:py-12">
+								<p role="alert" className="text-sm text-destructive">
+									The Future Log is unavailable. Your entries could not be loaded.
+								</p>
+								<Button
+									type="button"
+									size="sm"
+									disabled={isFutureLogFetching}
+									onClick={() => refetchFutureLog()}
+								>
+									{isFutureLogFetching ? "Retrying…" : "Retry loading Future Log"}
+								</Button>
+							</CardContent>
+						</Card>
+					) : sortedMonths.length === 0 ? (
 						<Card>
 							<CardContent className="py-10 sm:py-12 text-center">
 								<p className="text-sm text-muted-foreground">
@@ -133,18 +182,13 @@ export default function FutureLogPage() {
 								<CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
 									<div className="space-y-1.5">
 										{grouped[month].map((entry) => (
-											<div
+											<FutureLogEntryItem
 												key={entry.id}
-												className="flex items-start gap-2.5 py-1.5"
-											>
-												<SignifierIcon
-													signifier={entry.signifier}
-													status="open"
-												/>
-												<p className="text-sm text-foreground break-words">
-													{entry.text}
-												</p>
-											</div>
+												entry={entry}
+												onUpdate={handleUpdate}
+												onMarkMigrated={handleMarkMigrated}
+												onDelete={handleDelete}
+											/>
 										))}
 									</div>
 								</CardContent>

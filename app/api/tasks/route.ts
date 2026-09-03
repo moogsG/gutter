@@ -4,6 +4,7 @@ import {
 	handleValidationError,
 } from "@/lib/api-error-handler";
 import { getDb } from "@/lib/db";
+import { getJournalDate } from "@/lib/journal-date";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import { logValidationFailure } from "@/lib/security-logger";
 import { authenticateTaskRequest } from "@/lib/task-auth";
@@ -42,12 +43,7 @@ function normalizeTaskRow(task: TaskRow) {
 }
 
 function getLocalTaskDate() {
-	return new Intl.DateTimeFormat("en-CA", {
-		timeZone: "America/Cancun",
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-	}).format(new Date());
+	return getJournalDate();
 }
 
 export async function GET(req: NextRequest) {

@@ -11,6 +11,8 @@
  * - Cache keys are date-scoped; midnight naturally invalidates yesterday's data.
  */
 
+import { getJournalDate } from "@/lib/journal-date";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface TodayFocusCacheEntry<T = unknown> {
@@ -59,7 +61,7 @@ export function getFromCache<T>(key: string): TodayFocusCacheEntry<T> | null {
   const entry = todayFocusCache.get(key) as TodayFocusCacheEntry<T> | undefined;
   if (!entry) return null;
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getJournalDate();
   const isStale = entry.date !== today || Date.now() - entry.cachedAt > CACHE_TTL_MS;
 
   if (isStale) {
@@ -73,7 +75,7 @@ export function getFromCache<T>(key: string): TodayFocusCacheEntry<T> | null {
 export function setCache<T>(key: string, data: T, date: string): void {
   // Evict entries for old dates before adding a new one
   if (todayFocusCache.size > 5) {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getJournalDate();
     for (const [k, v] of todayFocusCache.entries()) {
       if (v.date !== today) todayFocusCache.delete(k);
     }

@@ -4,11 +4,10 @@ import type {
   CalendarRunwayData,
   CalendarRunwayDay,
 } from "@/types";
+import { shiftJournalDate } from "@/lib/journal-date";
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function formatDayLabel(date: string): { label: string; dayName: string } {
@@ -147,7 +146,7 @@ export function buildCalendarRunway(
   requestedDate: string,
   rawEvents: CalendarEvent[],
   failedCalendars: string[] = [],
-): CalendarRunwayData {
+): Omit<CalendarRunwayData, "source"> {
   const events = rawEvents.map(toCalendarEvent);
   const upcomingDays: CalendarRunwayDay[] = Array.from({ length: 7 }, (_, index) => {
     const date = shiftDate(requestedDate, index);

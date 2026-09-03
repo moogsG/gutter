@@ -12,8 +12,10 @@
  */
 
 import { getDateNightData } from "@/lib/date-night";
-import { generateCompletion, getLLMInfo, type LLMTool, type LLMMessage } from "@/lib/llm-router";
+import { generateCompletion, getLLMInfo, type LLMMessage, type LLMTool } from "@/lib/llm-router";
+import { getOpenClawWorkspacePath } from "@/lib/paths";
 import { searchMeetingContext } from "@/lib/vector-store";
+import { getJournalDate } from "@/lib/journal-date";
 
 type MeetingPrepMode = "work" | "relationship" | "spiritual" | "personal";
 
@@ -64,9 +66,9 @@ function formatMeetingDate(time: string): string {
 function getOccurrenceDate(time: string): string {
 	const parsed = new Date(time);
 	if (Number.isNaN(parsed.getTime())) {
-		return new Date().toISOString().split("T")[0];
+		return getJournalDate();
 	}
-	return parsed.toISOString().split("T")[0];
+	return getJournalDate(parsed);
 }
 
 function classifyMeetingPrep(calendar: string, title: string): MeetingPrepMode {
@@ -390,7 +392,7 @@ async function searchMemory(query: string): Promise<string> {
 	const { execSync } = await import("node:child_process");
 	const fs = await import("node:fs");
 	try {
-		const memDir = `${process.env.HOME}/.openclaw/workspace/memory`;
+		const memDir = `${getOpenClawWorkspacePath()}/memory`;
 		const keywords = query
 			.toLowerCase()
 			.split(/\s+/)

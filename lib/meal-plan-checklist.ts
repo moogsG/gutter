@@ -1,8 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { MealPlanChecklistSection, MealPlanGrocerySection } from "@/types";
+import { getOpenClawWorkspacePath } from "@/lib/paths";
 
-const WORKSPACE_ROOT = join(process.env.HOME || "/Users/moogs", ".openclaw", "workspace");
+const WORKSPACE_ROOT = getOpenClawWorkspacePath();
 const CHECKLIST_PATH = join(WORKSPACE_ROOT, "memory", "meal-plan-checklist.json");
 
 interface StoredChecklistState {

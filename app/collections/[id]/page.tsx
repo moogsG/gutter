@@ -8,6 +8,7 @@ import { SignifierIcon } from "@/components/journal/SignifierIcon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useGetCollectionQuery } from "@/store/api/journalApi";
+import { getJournalDate } from "@/lib/journal-date";
 
 export default function CollectionPage({
 	params,
@@ -36,7 +37,7 @@ export default function CollectionPage({
 	return (
 		<>
 			<JournalHeader
-				date={new Date().toISOString().split("T")[0]}
+				date={getJournalDate()}
 				onPrevDay={() => {}}
 				onNextDay={() => {}}
 				onToday={() => {}}
@@ -44,12 +45,12 @@ export default function CollectionPage({
 			<div className="flex-1 overflow-auto p-6">
 				<div className="max-w-4xl mx-auto">
 					<div className="flex items-center gap-4 mb-6">
-						<Link href="/collections">
-							<Button variant="ghost" size="sm">
+						<Button asChild variant="ghost" size="sm">
+							<Link href="/collections">
 								<ArrowLeft className="w-4 h-4 mr-2" />
 								Back
-							</Button>
-						</Link>
+							</Link>
+						</Button>
 						<h2 className="text-2xl font-bold text-foreground">
 							{collection.title}
 						</h2>

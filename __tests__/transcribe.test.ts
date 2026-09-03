@@ -1,13 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { tmpdir } from "os";
+import { homedir, tmpdir } from "os";
 import { join } from "path";
 import { existsSync } from "fs";
 
 describe("Audio Transcription", () => {
-  const WHISPER_MODEL = join(
-    process.env.HOME || "/Users/moogs",
-    ".cache/whisper/ggml-base.en.bin"
-  );
+  const WHISPER_MODEL = join(homedir(), ".cache/whisper/ggml-base.en.bin");
 
   describe("Audio format conversion", () => {
     it("should convert webm to 16kHz mono WAV", () => {

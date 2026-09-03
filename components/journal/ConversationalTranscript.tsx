@@ -12,10 +12,11 @@ const WELCOME =
 
 interface ConversationalTranscriptProps {
   date: string;
+  captureMode?: "default" | "task";
   onEntriesCreated?: () => void;
 }
 
-export function ConversationalTranscript({ date, onEntriesCreated }: ConversationalTranscriptProps) {
+export function ConversationalTranscript({ date, captureMode = "default", onEntriesCreated }: ConversationalTranscriptProps) {
   const {
     messages,
     input,
@@ -28,7 +29,7 @@ export function ConversationalTranscript({ date, onEntriesCreated }: Conversatio
     handleSubmit,
     handleKeyDown,
     clearChat,
-  } = useCaptureChat(date, onEntriesCreated);
+  } = useCaptureChat(date, onEntriesCreated, captureMode);
 
   const isEmpty = messages.length === 0;
 
@@ -37,7 +38,7 @@ export function ConversationalTranscript({ date, onEntriesCreated }: Conversatio
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 min-h-0">
         {isEmpty ? (
-          <AssistantBubble content={WELCOME} />
+          <AssistantBubble content={captureMode === "task" ? "What task do you want to capture?" : WELCOME} />
         ) : (
           messages.map((msg) => <ChatMessage key={msg.id} message={msg} />)
         )}

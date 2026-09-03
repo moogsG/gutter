@@ -2,21 +2,19 @@
 
 import { AlertTriangle, BarChart3, Flame, Megaphone, PenSquare, Rocket, Sparkles } from "lucide-react";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGetLinkedInBoardQuery } from "@/store/api/linkedinApi";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 function getCancunTodayDate(): string {
-  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Cancun", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function LinkedInBoardSkeleton() {
@@ -24,7 +22,7 @@ function LinkedInBoardSkeleton() {
 }
 
 export function LinkedInBoard({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {
-  const { data, isLoading, error } = useGetLinkedInBoardQuery(date);
+  const { data, isLoading, error, refetch } = useGetLinkedInBoardQuery(date);
 
   return (
     <div className="flex h-full flex-col overflow-auto">
@@ -34,6 +32,7 @@ export function LinkedInBoard({ date, onDateChange }: { date: string; onDateChan
         {!isLoading && error ? <Card className="mx-auto max-w-xl border-destructive/30 bg-destructive/10"><CardContent className="flex items-center gap-3 p-5 text-sm text-foreground"><AlertTriangle className="h-5 w-5 text-destructive" /> LinkedIn cockpit failed to load. Spectacularly unhelpful.</CardContent></Card> : null}
         {!isLoading && data ? (
           <div className="mx-auto flex max-w-6xl flex-col gap-4">
+            <OptionalSourceNotice source={data.source} onRetry={() => void refetch()} />
             <section className="rounded-[2rem] border border-primary/20 bg-[linear-gradient(135deg,rgba(59,130,246,0.16),rgba(255,255,255,0.02),rgba(16,185,129,0.12))] p-5 shadow-[0_0_60px_rgba(59,130,246,0.08)]">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div><p className="text-xs uppercase tracking-[0.35em] text-primary/80">LinkedIn cockpit</p><h1 className="mt-2 text-3xl font-semibold text-foreground">{data.headline}</h1><p className="mt-2 max-w-2xl text-sm text-muted-foreground">A funding-leverage screen for hooks, lessons, and the next post instead of leaving all of that buried in flat files like a little goblin hoard.</p></div>

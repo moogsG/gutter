@@ -1,10 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import { type NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 import { fetchCalendarEvents, calendarCache, CALENDAR_ENABLED } from "@/lib/calendar";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { getOpenClawWorkspacePath } from "@/lib/paths";
 import type {
   StatusBoardData,
   StatusCheck,
@@ -13,7 +14,7 @@ import type {
   StatusServiceProbe,
 } from "@/types";
 
-const WORKSPACE_ROOT = join(homedir(), ".openclaw", "workspace");
+const WORKSPACE_ROOT = getOpenClawWorkspacePath();
 const MEMORY_DIR = join(WORKSPACE_ROOT, "memory");
 const NIGHTLY_STATE_PATH = join(MEMORY_DIR, "nightly-initiative-state.json");
 const SERVICE_HEALTH_LOG_PATH = join(MEMORY_DIR, "service-health.jsonl");
@@ -33,21 +34,11 @@ type ServiceHealthLogEntry = {
 
 function getRequestedDate(input: string | null): string {
   if (input && /^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
-
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function formatTimestamp(timestamp: number | null): string | null {
@@ -132,7 +123,7 @@ async function measureProbe<T>(
   const startedAt = performance.now();
 
   try {
-    const timeout = new Promise<never>((_, reject) => {
+    const timeout = new Promise<T>((_, reject) => {
       setTimeout(() => reject(new Error(`Probe exceeded ${downMs}ms timeout`)), downMs);
     });
 
@@ -203,7 +194,15 @@ async function probeCalendarBridge(requestedDate: string): Promise<{
 
   if (!result.ok) {
     return {
-      result: { ok: false as const, error: result.error },
+      result: {
+        ok: false as const,
+        error: result.error,
+        source: {
+          state: "unavailable",
+          message: "Calendar probe timed out. Retry the connection.",
+          recovery: "retry",
+        },
+      },
       probe: {
         service: "calendar" as const,
         label: "Live calendar probe",

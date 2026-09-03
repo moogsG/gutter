@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
 import { generateMeetingPrep } from "@/lib/meeting-prep";
+import {
+	isValidMeetingOccurrenceDate,
+	resolveMeetingOccurrenceDate,
+} from "@/lib/meeting-occurrence";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 function isWorkMeeting(calendar: string | undefined): boolean {
@@ -19,7 +23,8 @@ export async function POST(request: NextRequest) {
 	if (limited) return limited;
 
 	try {
-		const { eventId, title, time, calendar, context } = await request.json();
+		const { eventId, title, time, calendar, context, occurrenceDate } =
+			await request.json();
 
 		if (!eventId || !title || !time) {
 			return Response.json(
@@ -27,19 +32,29 @@ export async function POST(request: NextRequest) {
 				{ status: 400 },
 			);
 		}
+		if (
+			occurrenceDate !== undefined &&
+			!isValidMeetingOccurrenceDate(occurrenceDate)
+		) {
+			return Response.json(
+				{ error: "occurrenceDate must be a valid YYYY-MM-DD date" },
+				{ status: 400 },
+			);
+		}
 
 		const db = getDb();
 		const now = new Date().toISOString();
-		const occurrenceDate = time
-			? new Date(time).toISOString().split("T")[0]
-			: new Date().toISOString().split("T")[0];
+		const normalizedOccurrenceDate = resolveMeetingOccurrenceDate({
+			occurrenceDate,
+			time,
+		});
 
 		// Upsert meeting prep row
 		const existing = db
 			.prepare(
 				"SELECT id FROM meeting_prep WHERE event_id = ? AND occurrence_date = ?",
 			)
-			.get(eventId, occurrenceDate) as any;
+			.get(eventId, normalizedOccurrenceDate) as any;
 
 		let id: string;
 		if (existing) {
@@ -58,7 +73,7 @@ export async function POST(request: NextRequest) {
 				title,
 				time,
 				calendar || "",
-				occurrenceDate,
+				normalizedOccurrenceDate,
 				"preparing",
 				now,
 				now,

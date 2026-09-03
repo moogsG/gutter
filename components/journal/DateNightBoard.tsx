@@ -2,27 +2,20 @@
 
 import { AlertTriangle, CalendarHeart, Heart, Gift, Sparkles, ShieldAlert } from "lucide-react";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useGetDateNightQuery } from "@/store/api/dateNightApi";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 function getCancunTodayDate(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function tone(status: "drifting" | "locked-in" | "scheduled") {
@@ -42,7 +35,7 @@ function formatEventDate(value: string) {
 }
 
 export function DateNightBoard({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {
-  const { data, isLoading, error, isFetching } = useGetDateNightQuery(date);
+  const { data, isLoading, error, isFetching, refetch } = useGetDateNightQuery(date);
 
   return (
     <div className="flex h-full flex-col overflow-auto">
@@ -59,6 +52,8 @@ export function DateNightBoard({ date, onDateChange }: { date: string; onDateCha
         {!isLoading && error ? <FailureState /> : null}
         {!isLoading && data ? (
           <div className="mx-auto flex max-w-6xl flex-col gap-4">
+            <OptionalSourceNotice source={data.sources.calendar} onRetry={refetch} />
+            <OptionalSourceNotice source={data.sources.workspace} onRetry={refetch} />
             <section className={cn("rounded-[2rem] bg-[linear-gradient(135deg,rgba(244,114,182,0.17),rgba(255,255,255,0.02),rgba(251,191,36,0.12))] p-5 shadow-[0_0_60px_rgba(244,114,182,0.12)]", tone(data.status))}>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>

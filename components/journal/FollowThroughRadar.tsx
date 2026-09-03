@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AlertTriangle, ArrowUpRight, CheckCircle2, Clock3, ShieldAlert, Siren, Skull, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,22 +15,14 @@ import {
   useUpdateFollowThroughTaskMutation,
 } from "@/store/api/radarApi";
 import type { FollowThroughPromise, FollowThroughTask } from "@/types";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 function getCancunTodayDate(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function laneTone(lane: string | null) {
@@ -212,7 +205,7 @@ function RadarSkeleton() {
 }
 
 export function FollowThroughRadar({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {
-  const { data, isLoading, error, isFetching } = useGetFollowThroughRadarQuery(date);
+  const { data, isLoading, error, isFetching, refetch } = useGetFollowThroughRadarQuery(date);
   const [updatePromise, { isLoading: isSavingPromise }] = useUpdateFollowThroughPromiseMutation();
   const [updateTask, { isLoading: isSavingTask }] = useUpdateFollowThroughTaskMutation();
 
@@ -255,6 +248,7 @@ export function FollowThroughRadar({ date, onDateChange }: { date: string; onDat
         {!isLoading && error ? <FailureState /> : null}
         {!isLoading && data ? (
           <div className="mx-auto flex max-w-6xl flex-col gap-4">
+            <OptionalSourceNotice source={data.source} onRetry={() => void refetch()} />
             <section className="rounded-[2rem] border border-primary/20 bg-[linear-gradient(135deg,rgba(255,61,154,0.16),rgba(255,255,255,0.02),rgba(251,191,36,0.10))] p-5 shadow-[0_0_60px_rgba(255,61,154,0.08)]">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>

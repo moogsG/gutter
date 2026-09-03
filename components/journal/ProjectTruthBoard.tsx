@@ -3,27 +3,20 @@
 import { AlertTriangle, ArrowUpRight, BookOpenText, FileWarning, Sparkles, Target, Workflow } from "lucide-react";
 import Link from "next/link";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGetProjectTruthQuery } from "@/store/api/truthApi";
 import type { ProjectTruthLiveTask, ProjectTruthProject, ProjectTruthRecurringTask } from "@/types";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 function getCancunTodayDate(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function ProjectCard({ project }: { project: ProjectTruthProject }) {
@@ -119,7 +112,7 @@ function TruthSkeleton() {
 }
 
 export function ProjectTruthBoard({ date, onDateChange }: { date: string; onDateChange: (date: string) => void }) {
-  const { data, isLoading, error, isFetching } = useGetProjectTruthQuery(date);
+  const { data, isLoading, error, isFetching, refetch } = useGetProjectTruthQuery(date);
 
   return (
     <div className="flex h-full flex-col overflow-auto">
@@ -136,6 +129,8 @@ export function ProjectTruthBoard({ date, onDateChange }: { date: string; onDate
         {!isLoading && error ? <FailureState /> : null}
         {!isLoading && data ? (
           <div className="mx-auto flex max-w-6xl flex-col gap-4">
+            <OptionalSourceNotice source={data.sources.projectDocument} onRetry={() => void refetch()} />
+            <OptionalSourceNotice source={data.sources.dailyMemory} onRetry={() => void refetch()} />
             <section className="rounded-[2rem] border border-primary/20 bg-[linear-gradient(135deg,rgba(255,61,154,0.16),rgba(255,255,255,0.02),rgba(125,211,252,0.12))] p-5 shadow-[0_0_60px_rgba(255,61,154,0.08)]">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>

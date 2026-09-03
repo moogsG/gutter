@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { fetchCalendarEvents } from "@/lib/calendar";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest) {
@@ -19,25 +20,17 @@ export async function GET(request: NextRequest) {
 
 		if (month) {
 			const [year, monthNum] = month.split("-");
-			const startDate = new Date(
-				parseInt(year, 10),
-				parseInt(monthNum, 10) - 1,
-				1,
-			);
-			const endDate = new Date(parseInt(year, 10), parseInt(monthNum, 10), 0);
-			fromStr = startDate.toISOString().split("T")[0];
-			toStr = endDate.toISOString().split("T")[0];
+			const lastDay = new Date(Date.UTC(parseInt(year, 10), parseInt(monthNum, 10), 0)).getUTCDate();
+			fromStr = `${year}-${monthNum}-01`;
+			toStr = `${year}-${monthNum}-${String(lastDay).padStart(2, "0")}`;
 		} else {
-			const now = new Date();
-			const endDate = new Date();
-			endDate.setDate(endDate.getDate() + 7);
-			fromStr = now.toISOString().split("T")[0];
-			toStr = endDate.toISOString().split("T")[0];
+			fromStr = getJournalDate();
+			toStr = shiftJournalDate(fromStr, 7);
 		}
 
 		const result = await fetchCalendarEvents(fromStr, toStr);
 		if (!result.ok) {
-			throw new Error(result.error || "Failed to fetch calendar events");
+			return Response.json({ events: [], source: result.source });
 		}
 
 		let upcoming = (result.data || [])
@@ -59,7 +52,7 @@ export async function GET(request: NextRequest) {
 			upcoming = upcoming.filter((e: any) => !e.allDay).slice(0, 5);
 		}
 
-		return Response.json({ events: upcoming });
+		return Response.json({ events: upcoming, source: result.source });
 	} catch (error) {
 		console.error("Calendar fetch error:", error);
 		return Response.json(

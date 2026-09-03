@@ -49,7 +49,7 @@ Optional on iPhone/iPad:
 ## 3) Verify `accli` can see the calendars
 
 ```bash
-npx @joargp/accli calendars list
+npx @joargp/accli calendars
 ```
 
 Confirm your Google calendar names are listed exactly as expected.
@@ -62,9 +62,9 @@ In `.env`:
 
 ```env
 CALENDAR_ENABLED=true
-ACCLI_CMD=accli
+CALENDAR_CLI=npx @joargp/accli
 
-# Comma-separated, exact names from `accli calendars list`
+# Comma-separated, exact names from `npx @joargp/accli calendars`
 CALENDARS=Gutter - Work,Gutter - Family,Gutter - JW,Gutter - Personal
 
 # Default target when a command doesn’t specify a calendar

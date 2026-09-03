@@ -50,6 +50,11 @@ describe("database migrations", () => {
 		expect(
 			db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_credentials'").get(),
 		).toBeDefined();
+		const habitCheckIns = db
+			.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'habit_check_ins'")
+			.get() as { sql: string } | undefined;
+		expect(habitCheckIns?.sql).toContain("UNIQUE (habit_id, date)");
+		expect(habitCheckIns?.sql).toContain("state IN ('done', 'skipped')");
 		db.close();
 	});
 

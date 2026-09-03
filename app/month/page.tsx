@@ -4,10 +4,12 @@ import { ChevronLeft, ChevronRight, FileText, Mic } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarRunwayPanel } from "@/components/journal/CalendarRunwayPanel";
 import { JournalHeader } from "@/components/journal/JournalHeader";
+import { OptionalSourceNotice } from "@/components/journal/OptionalSourceNotice";
 import { MeetingDrawer } from "@/components/meeting/MeetingDrawer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getCalendarColorToken } from "@/lib/calendar-colors";
+import { getJournalDate } from "@/lib/journal-date";
 import { cn } from "@/lib/utils";
 import { useGetMeetingPrepQuery } from "@/store/api/meetingPrepApi";
 import { useGetCalendarMonthQuery } from "@/store/api/tasksApi";
@@ -18,14 +20,7 @@ function formatMonth(date: Date): string {
 }
 
 function getCancunTodayDate(): string {
-	const parts = new Intl.DateTimeFormat("en-US", {
-		timeZone: "America/Cancun",
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-	}).formatToParts(new Date());
-	const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-	return `${lookup.year}-${lookup.month}-${lookup.day}`;
+	return getJournalDate();
 }
 
 function getRunwayAnchorDate(currentMonth: Date): string {
@@ -301,7 +296,7 @@ export default function MonthlyLogPage() {
 	});
 	const calendarEvents = calendarData?.events || [];
 
-	const { data: meetingPrepData } = useGetMeetingPrepQuery();
+	const { data: meetingPrepData, refetch: refetchMeetingPrep } = useGetMeetingPrepQuery();
 
 	const weeks = useMemo(
 		() =>
@@ -420,6 +415,14 @@ export default function MonthlyLogPage() {
 				) : (
 					<div className="flex-1 flex flex-col min-h-0">
 						<CalendarRunwayPanel date={getRunwayAnchorDate(currentMonth)} />
+						{meetingPrepData?.source ? (
+							<div className="px-3 py-2 sm:px-6">
+								<OptionalSourceNotice
+									source={meetingPrepData.source}
+									onRetry={refetchMeetingPrep}
+								/>
+							</div>
+						) : null}
 
 						{/* Day labels */}
 						<div className="grid grid-cols-7 border-b border-border/50">

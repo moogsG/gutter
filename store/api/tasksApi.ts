@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { CalendarEvent, CalendarRunwayData, Task, TaskComment } from "@/types";
+import type { CalendarEvent, CalendarRunwayData, OptionalSourceState, Task, TaskComment } from "@/types";
 
 export type KanbanStatus = "todo" | "in-progress" | "blocked" | "done";
 
@@ -26,12 +26,12 @@ export const tasksApi = createApi({
   baseQuery: fetchBaseQuery({ baseUrl: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/api` }),
   tagTypes: ["Calendar", "Tasks", "KanbanTasks", "TaskComments"],
   endpoints: (builder) => ({
-    getCalendar: builder.query<{ events: CalendarEvent[] }, void>({
+    getCalendar: builder.query<{ events: CalendarEvent[]; source: OptionalSourceState }, void>({
       query: () => "/calendar",
       providesTags: ["Calendar"],
       keepUnusedDataFor: 30,
     }),
-    getCalendarMonth: builder.query<{ events: CalendarEvent[] }, string>({
+    getCalendarMonth: builder.query<{ events: CalendarEvent[]; source: OptionalSourceState }, string>({
       query: (month) => `/calendar?month=${month}`,
       providesTags: (result, error, month) => [{ type: "Calendar", id: month }],
       keepUnusedDataFor: 30,

@@ -1,18 +1,20 @@
 import { access, open, readdir, stat } from "node:fs/promises";
-import { constants as fsConstants } from "node:fs";
-import { homedir } from "node:os";
+import { constants as fsConstants, existsSync } from "node:fs";
 import { join } from "node:path";
 import { type NextRequest, NextResponse } from "next/server";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
+import { getOpenClawAgentsPath, getOpenClawWorkspacePath } from "@/lib/paths";
 import type {
+  OptionalSourceState,
   SessionActivityBoardData,
   SessionActivityDay,
   SessionActivityReport,
   SessionActivitySession,
 } from "@/types";
 
-const AGENTS_ROOT = join(homedir(), ".openclaw", "agents");
-const WORKSPACE_ROOT = join(homedir(), ".openclaw", "workspace");
+const AGENTS_ROOT = getOpenClawAgentsPath();
+const WORKSPACE_ROOT = getOpenClawWorkspacePath();
 const MEMORY_ROOT = join(WORKSPACE_ROOT, "memory");
 const LOOKBACK_DAYS = 7;
 const RECENT_SESSION_LIMIT = 16;
@@ -22,21 +24,11 @@ type RawActivityReport = Pick<SessionActivityReport, "date" | "reportedActive" |
 
 function getRequestedDate(input: string | null): string {
   if (input && /^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
-
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function getDisplayDate(date: string): string {
@@ -52,8 +44,9 @@ async function pathExists(path: string): Promise<boolean> {
   try {
     await access(path, fsConstants.F_OK);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
   }
 }
 
@@ -139,41 +132,59 @@ function cleanTitle(title: string): string {
   return title;
 }
 
-async function readSessionSummary(agentId: string, date: string, fileName: string): Promise<SessionActivitySession | null> {
+async function readSessionSummary(agentId: string, date: string, fileName: string): Promise<SessionActivitySession> {
   const [year, month, day] = date.split("-");
   const filePath = join(AGENTS_ROOT, agentId, "agent", "codex-home", "sessions", year, month, day, fileName);
 
-  try {
-    const [fileHead, fileStats] = await Promise.all([readFileHead(filePath), stat(filePath)]);
-    const lines = fileHead.split("\n").filter(Boolean);
-    if (!lines.length) return null;
+  const [fileHead, fileStats] = await Promise.all([readFileHead(filePath), stat(filePath)]);
+  const lines = fileHead.split("\n").filter(Boolean);
+  if (!lines.length) throw new Error(`Transcript is empty: ${filePath}`);
 
-    const meta = JSON.parse(lines[0]) as Record<string, any>;
-    const payload = meta.payload ?? {};
-    const title = parseTitle(lines);
-    const cronLabel = parseCronLabel(title);
+  const meta = JSON.parse(lines[0]) as Record<string, any>;
+  const payload = meta.payload ?? {};
+  const title = parseTitle(lines);
+  const cronLabel = parseCronLabel(title);
 
-    return {
-      id: payload.session_id || payload.id || fileName.replace(/\.jsonl$/, ""),
-      agentId,
-      date,
-      title: cleanTitle(title),
-      category: cronLabel ? "cron" : "manual",
-      cronLabel,
-      startedAt: payload.timestamp || meta.timestamp || new Date(fileStats.mtimeMs).toISOString(),
-      updatedAt: new Date(fileStats.mtimeMs).toISOString(),
-      model: payload.model_provider || "unknown",
-      source: payload.source || payload.originator || "unknown",
-      transcriptPath: filePath,
-    };
-  } catch {
-    return null;
-  }
+  return {
+    id: payload.session_id || payload.id || fileName.replace(/\.jsonl$/, ""),
+    agentId,
+    date,
+    title: cleanTitle(title),
+    category: cronLabel ? "cron" : "manual",
+    cronLabel,
+    startedAt: payload.timestamp || meta.timestamp || new Date(fileStats.mtimeMs).toISOString(),
+    updatedAt: new Date(fileStats.mtimeMs).toISOString(),
+    model: payload.model_provider || "unknown",
+    source: payload.source || payload.originator || "unknown",
+    transcriptPath: filePath,
+  };
 }
 
-async function listAgentIds(): Promise<string[]> {
-  const entries = await readdir(AGENTS_ROOT, { withFileTypes: true });
-  return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+async function listAgentIds(): Promise<{ agentIds: string[]; source: OptionalSourceState }> {
+  try {
+    const entries = await readdir(AGENTS_ROOT, { withFileTypes: true });
+    const agentIds = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    return {
+      agentIds,
+      source: {
+        state: agentIds.length > 0 ? "ready" : "empty",
+        message: agentIds.length > 0 ? "Agent transcripts loaded." : "No agent transcript sources found.",
+        recovery: null,
+      },
+    };
+  } catch {
+    const notConfigured = !existsSync(AGENTS_ROOT);
+    return {
+      agentIds: [],
+      source: {
+        state: notConfigured ? "not-configured" : "unavailable",
+        message: notConfigured
+          ? "Set OPENCLAW_AGENTS_PATH to load agent transcripts."
+          : "Agent transcripts are unavailable. Check the agents path and retry.",
+        recovery: notConfigured ? "configure" : "retry",
+      },
+    };
+  }
 }
 
 async function collectSessionsForDate(agentIds: string[], date: string): Promise<SessionActivitySession[]> {
@@ -187,49 +198,88 @@ async function collectSessionsForDate(agentIds: string[], date: string): Promise
         .filter((file) => file.endsWith(".jsonl"))
         .sort();
 
-      const summaries = await Promise.all(files.map((file) => readSessionSummary(agentId, date, file)));
-      return summaries.filter((summary): summary is SessionActivitySession => Boolean(summary));
+      return Promise.all(files.map((file) => readSessionSummary(agentId, date, file)));
     }),
   );
 
   return sessions.flat();
 }
 
-async function readActivityReports(targetDates: string[]): Promise<RawActivityReport[]> {
-  const reports = await Promise.all(
-    targetDates.map(async (date) => {
-      try {
-        const markdown = await open(join(MEMORY_ROOT, `${date}.md`), "r");
+async function readActivityReports(targetDates: string[]): Promise<{
+  reports: RawActivityReport[];
+  source: OptionalSourceState;
+}> {
+  try {
+    await access(MEMORY_ROOT, fsConstants.R_OK);
+  } catch {
+    const notConfigured = !existsSync(WORKSPACE_ROOT);
+    return {
+      reports: [],
+      source: {
+        state: notConfigured ? "not-configured" : "unavailable",
+        message: notConfigured
+          ? "Set OPENCLAW_WORKSPACE_PATH to load session activity notes."
+          : "Session activity notes are unavailable. Check the workspace and retry.",
+        recovery: notConfigured ? "configure" : "retry",
+      },
+    };
+  }
+
+  let reports: Array<RawActivityReport | null>;
+  try {
+    reports = await Promise.all(
+      targetDates.map(async (date) => {
         try {
-          const head = await markdown.readFile({ encoding: "utf8" });
-          const lines = head.split("\n").map((entry) => entry.trim());
-          let reportedActive: number | null = null;
+          const markdown = await open(join(MEMORY_ROOT, `${date}.md`), "r");
+          try {
+            const head = await markdown.readFile({ encoding: "utf8" });
+            const lines = head.split("\n").map((entry) => entry.trim());
+            let reportedActive: number | null = null;
 
-          for (let index = 0; index < lines.length - 1; index += 1) {
-            if (lines[index] !== "### Activity") continue;
-            const match = lines[index + 1]?.match(/^(\d+)\s+active session\(s\)$/);
-            if (match) {
-              reportedActive = Number.parseInt(match[1], 10);
+            for (let index = 0; index < lines.length - 1; index += 1) {
+              if (lines[index] !== "### Activity") continue;
+              const match = lines[index + 1]?.match(/^(\d+)\s+active session\(s\)$/);
+              if (match) {
+                reportedActive = Number.parseInt(match[1], 10);
+              }
             }
+
+            if (reportedActive === null) return null;
+
+            return {
+              date,
+              reportedActive,
+              line: `Activity ${reportedActive} active session(s)`,
+            } satisfies RawActivityReport;
+          } finally {
+            await markdown.close();
           }
-
-          if (reportedActive === null) return null;
-
-          return {
-            date,
-            reportedActive,
-            line: `Activity ${reportedActive} active session(s)`,
-          } satisfies RawActivityReport;
-        } finally {
-          await markdown.close();
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+          throw error;
         }
-      } catch {
-        return null;
-      }
-    }),
-  );
+      }),
+    );
+  } catch {
+    return {
+      reports: [],
+      source: {
+        state: "unavailable",
+        message: "Session activity notes are unavailable. Check the workspace and retry.",
+        recovery: "retry",
+      },
+    };
+  }
 
-  return reports.filter((report): report is SessionActivityReport => Boolean(report));
+  const availableReports = reports.filter((report): report is SessionActivityReport => Boolean(report));
+  return {
+    reports: availableReports,
+    source: {
+      state: availableReports.length > 0 ? "ready" : "empty",
+      message: availableReports.length > 0 ? "Session activity notes loaded." : "No session activity notes found.",
+      recovery: null,
+    },
+  };
 }
 
 function summarizeDays(dates: string[], sessionsByDate: Map<string, SessionActivitySession[]>): SessionActivityDay[] {
@@ -249,7 +299,24 @@ function summarizeDays(dates: string[], sessionsByDate: Map<string, SessionActiv
   });
 }
 
-function buildNextMove(requestedDay: SessionActivityDay, activityReport: SessionActivityReport | null): string {
+function buildNextMove(
+  requestedDay: SessionActivityDay,
+  activityReport: SessionActivityReport | null,
+  transcriptsSource: OptionalSourceState,
+  memorySource: OptionalSourceState,
+): string {
+  if (transcriptsSource.state === "unavailable") {
+    return "Agent transcripts are unavailable. Check the agents path and retry before trusting session totals.";
+  }
+  if (transcriptsSource.state === "not-configured") {
+    return "Configure OPENCLAW_AGENTS_PATH to load session evidence.";
+  }
+  if (memorySource.state === "unavailable") {
+    return "Session activity notes are unavailable. Check the workspace and retry before trusting activity comparisons.";
+  }
+  if (memorySource.state === "not-configured") {
+    return "Configure OPENCLAW_WORKSPACE_PATH to compare session evidence with activity notes.";
+  }
   if (activityReport && activityReport.date === requestedDay.date && requestedDay.totalSessions === 0) {
     return "The daily note claimed session activity, but the Codex transcript lane is empty for that date. Audit the logger before you trust the number.";
   }
@@ -278,13 +345,33 @@ export async function GET(req: NextRequest) {
   try {
     const requestedDate = getRequestedDate(req.nextUrl.searchParams.get("date"));
     const dates = Array.from({ length: LOOKBACK_DAYS }, (_, index) => shiftDate(requestedDate, -index));
-    const agentIds = await listAgentIds();
-    const sessionsPerDate = await Promise.all(dates.map((date) => collectSessionsForDate(agentIds, date)));
+    const { agentIds, source: agentsSource } = await listAgentIds();
+    let transcriptsSource = agentsSource;
+    let sessionsPerDate: SessionActivitySession[][] = dates.map(() => []);
+
+    if (agentsSource.state === "ready") {
+      try {
+        sessionsPerDate = await Promise.all(dates.map((date) => collectSessionsForDate(agentIds, date)));
+        const hasSessions = sessionsPerDate.some((sessions) => sessions.length > 0);
+        transcriptsSource = {
+          state: hasSessions ? "ready" : "empty",
+          message: hasSessions ? "Agent transcripts loaded." : "No agent transcripts found.",
+          recovery: null,
+        };
+      } catch {
+        transcriptsSource = {
+          state: "unavailable",
+          message: "Agent transcripts are unavailable. Check the agents path and retry.",
+          recovery: "retry",
+        };
+      }
+    }
+
     const sessionsByDate = new Map(dates.map((date, index) => [date, sessionsPerDate[index] || []]));
     const allSessions = sessionsPerDate.flat().sort((a, b) => b.startedAt.localeCompare(a.startedAt));
     const days = summarizeDays(dates, sessionsByDate);
     const requestedDay = days[0];
-    const activityReports = await readActivityReports(dates);
+    const { reports: activityReports, source: memorySource } = await readActivityReports(dates);
     const rawActivityReport = activityReports.find((report) => report.date === requestedDate) || activityReports[0] || null;
     const activityReport = rawActivityReport
       ? {
@@ -323,6 +410,10 @@ export async function GET(req: NextRequest) {
       .slice(0, 8);
 
     const payload: SessionActivityBoardData = {
+      sources: {
+        transcripts: transcriptsSource,
+        memory: memorySource,
+      },
       requestedDate,
       displayDate: getDisplayDate(requestedDate),
       generatedAt: new Date().toISOString(),
@@ -341,7 +432,7 @@ export async function GET(req: NextRequest) {
       byAgent,
       recentSessions: allSessions.slice(0, RECENT_SESSION_LIMIT),
       topCronLabels,
-      nextMove: buildNextMove(requestedDay, activityReport),
+      nextMove: buildNextMove(requestedDay, activityReport, transcriptsSource, memorySource),
     };
 
     return NextResponse.json(payload);

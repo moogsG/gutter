@@ -180,11 +180,17 @@ export async function GET(request: NextRequest) {
 
     const tomorrowHealthCount = tomorrowRows.filter((row) => parseTags(row.tags).some((tag) => tag.startsWith("health-cut"))).length;
     const tomorrowNonHealthCount = tomorrowRows.length - tomorrowHealthCount;
-    const meetings = await getMeetings(tomorrowDate);
-    const family = await getFamilyData(tomorrowDate);
+    const meetingData = await getMeetings(tomorrowDate);
+    const meetings = meetingData.meetings;
+    const familyData = await getFamilyData(tomorrowDate);
+    const family = familyData.data;
     const meetingsNeedingPrep = meetings.filter((meeting) => meeting.prepStatus !== "ready").length;
 
     const payload: EveningResetData = {
+      sources: {
+        calendar: meetingData.source,
+        family: familyData.source,
+      },
       requestedDate,
       tomorrowDate,
       displayDate: getDisplayDate(requestedDate),

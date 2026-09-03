@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { SchoolRunwayBoard } from "@/components/journal/SchoolRunwayBoard";
+import { getJournalDate } from "@/lib/journal-date";
 
 function getRuntimeTodayDate(): string {
-  return new Date().toISOString().split("T")[0];
+  return getJournalDate();
 }
 
 export default function SchoolPage() {

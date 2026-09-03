@@ -7,22 +7,17 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useState } from "react";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 interface TodayFocusProps {
   entries: JournalEntry[];
   date: string;
 }
 
-function formatDate(date: Date): string {
-  return date.toISOString().split("T")[0];
-}
-
 function getMigrateTargetDate(viewDate: string): string {
-  const today = formatDate(new Date());
+  const today = getJournalDate();
   if (viewDate === today) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return formatDate(tomorrow);
+    return shiftJournalDate(today, 1);
   }
   return today;
 }
@@ -215,12 +210,13 @@ export function TodayFocus({ entries, date }: TodayFocusProps) {
                         </p>
                       )}
                     </div>
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
+                    <div className="flex flex-wrap items-center gap-1 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => handleUnblock(task.id)}
                         disabled={processingId === task.id}
+                        aria-label={`Unblock ${task.text}`}
                         className="h-7 px-2 text-xs hover:bg-amber-500/20"
                       >
                         <Circle className="w-3 h-3 mr-1" />
@@ -255,12 +251,13 @@ export function TodayFocus({ entries, date }: TodayFocusProps) {
                         </span>
                       )}
                     </div>
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
+                    <div className="flex flex-wrap items-center gap-1 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => handleComplete(task.id)}
                         disabled={processingId === task.id}
+                        aria-label={`Complete ${task.text}`}
                         className="h-7 px-2 text-xs hover:bg-blue-500/20"
                       >
                         <Check className="w-3 h-3 mr-1" />
@@ -300,7 +297,7 @@ export function TodayFocus({ entries, date }: TodayFocusProps) {
                         : "border-border/60 bg-background/70 hover:bg-background"
                     )}
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between">
                       <div className="flex items-start gap-2 flex-1 min-w-0">
                         <p className="text-sm text-foreground flex-1">{task.text}</p>
                         <div className="flex items-center gap-1.5 shrink-0">
@@ -316,12 +313,13 @@ export function TodayFocus({ entries, date }: TodayFocusProps) {
                           )}
                         </div>
                       </div>
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
+                      <div data-testid={`today-focus-actions-${task.id}`} className="flex flex-wrap items-center gap-1 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => handleStart(task.id)}
                           disabled={processingId === task.id}
+                          aria-label={`Start ${task.text}`}
                           className={cn(
                             "h-7 px-2 text-xs",
                             isHighPriority ? "hover:bg-rose-500/20" : "hover:bg-blue-500/20"
@@ -335,6 +333,7 @@ export function TodayFocus({ entries, date }: TodayFocusProps) {
                           variant="ghost"
                           onClick={() => handleComplete(task.id)}
                           disabled={processingId === task.id}
+                          aria-label={`Complete ${task.text}`}
                           className={cn(
                             "h-7 px-2 text-xs",
                             isHighPriority ? "hover:bg-rose-500/20" : "hover:bg-primary/20"
@@ -348,6 +347,7 @@ export function TodayFocus({ entries, date }: TodayFocusProps) {
                           variant="ghost"
                           onClick={() => handleMigrate(task.id)}
                           disabled={processingId === task.id}
+                          aria-label={`Move ${task.text} to a later day`}
                           className={cn(
                             "h-7 px-2 text-xs",
                             isHighPriority ? "hover:bg-rose-500/20" : "hover:bg-primary/20"

@@ -31,6 +31,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useUpdateEntryMutation, useAddEntryMutation } from "@/store/api/journalApi";
+import { toast } from "sonner";
 
 interface EntryItemProps {
   entry: JournalEntry;
@@ -38,7 +39,7 @@ interface EntryItemProps {
   isChild?: boolean;
   onToggle?: (id: string) => void;
   onMigrate?: (id: string) => void;
-  onKill?: (id: string) => void;
+  onKill?: (id: string) => void | Promise<void>;
   onDelete?: (id: string) => void;
 }
 
@@ -119,6 +120,16 @@ export const EntryItem = memo(function EntryItem({ entry, collections = [], isCh
     updateEntry({ id: entry.id, priority, _date: entry.date });
   };
 
+  const handleStrikeOut = async () => {
+    if (!confirm(`Strike out "${entry.text}"? You can reopen it from this entry’s actions.`)) return;
+    try {
+      await onKill?.(entry.id);
+      toast.success(`${entry.text} was struck out`);
+    } catch {
+      toast.error(`Could not strike out ${entry.text}`);
+    }
+  };
+
   const waitingOn = entry.waiting_on?.trim();
 
   return (
@@ -135,7 +146,10 @@ export const EntryItem = memo(function EntryItem({ entry, collections = [], isCh
         <div className="flex items-start gap-2.5 sm:gap-3">
           {hasChildren && !isChild ? (
             <button
+              type="button"
               onClick={() => setExpanded(!expanded)}
+              aria-label={`${expanded ? "Collapse" : "Expand"} subtasks for ${entry.text}`}
+              aria-expanded={expanded}
               className="mt-1 shrink-0 text-muted-foreground transition-colors hover:text-foreground"
             >
               <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-90")} />
@@ -145,8 +159,11 @@ export const EntryItem = memo(function EntryItem({ entry, collections = [], isCh
           ) : null}
 
           <button
+            type="button"
             onClick={() => isTask && onToggle?.(entry.id)}
             disabled={!isTask}
+            aria-label={isTask ? `${isDone ? "Reopen" : "Complete"} ${entry.text}` : `${entry.signifier}: ${entry.text}`}
+            aria-pressed={isTask ? isDone : undefined}
             className={cn(
               "mt-0.5 shrink-0 transition-all",
               isTask && "cursor-pointer hover:scale-110 active:scale-95"
@@ -216,6 +233,7 @@ export const EntryItem = memo(function EntryItem({ entry, collections = [], isCh
               <Button
                 variant="ghost"
                 size="sm"
+                aria-label={`Open actions for ${entry.text}`}
                 className="h-8 w-8 shrink-0 p-0 opacity-60 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
               >
                 <MoreVertical className="h-4 w-4" />
@@ -274,7 +292,7 @@ export const EntryItem = memo(function EntryItem({ entry, collections = [], isCh
                     <ArrowRight className="h-4 w-4" />
                     Migrate
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onKill?.(entry.id)}>
+                  <DropdownMenuItem onClick={handleStrikeOut}>
                     <X className="h-4 w-4" />
                     Strike Out
                   </DropdownMenuItem>

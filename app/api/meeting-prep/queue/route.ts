@@ -3,6 +3,7 @@ import { fetchCalendarEvents } from "@/lib/calendar";
 import { getDb } from "@/lib/db";
 import { rateLimitMiddleware } from "@/lib/rate-limit";
 import type { MeetingPrepQueueData, MeetingPrepQueueItem } from "@/types";
+import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 const WINDOW_DAYS = 7;
 
@@ -11,20 +12,11 @@ function isIsoDate(value: string | null): value is string {
 }
 
 function getCancunTodayDate(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Cancun",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+  return getJournalDate();
 }
 
 function shiftDate(date: string, amount: number): string {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + amount);
-  return next.toISOString().split("T")[0];
+  return shiftJournalDate(date, amount);
 }
 
 function formatRange(from: string, to: string): string {
@@ -69,7 +61,16 @@ export async function GET(request: NextRequest) {
     const calendarResult = await fetchCalendarEvents(requestedDate, rangeEndDate);
 
     if (!calendarResult.ok) {
-      return Response.json({ error: calendarResult.error || "Calendar unavailable" }, { status: 503 });
+      const payload: MeetingPrepQueueData = {
+        source: calendarResult.source,
+        requestedDate,
+        rangeEndDate,
+        displayRange: formatRange(requestedDate, rangeEndDate),
+        generatedAt: new Date().toISOString(),
+        counts: { total: 0, redZone: 0, ready: 0, later: 0, notesCaptured: 0 },
+        groups: { redZone: [], ready: [], later: [] },
+      };
+      return Response.json(payload);
     }
 
     const db = getDb();
@@ -135,6 +136,7 @@ export async function GET(request: NextRequest) {
       });
 
     const payload: MeetingPrepQueueData = {
+      source: calendarResult.source,
       requestedDate,
       rangeEndDate,
       displayRange: formatRange(requestedDate, rangeEndDate),

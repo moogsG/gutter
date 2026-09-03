@@ -169,7 +169,7 @@ curl -L https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.b
 
 ```bash
 npm install -g @joargp/accli
-npx @joargp/accli calendars list
+npx @joargp/accli calendars
 ```
 
 ---
