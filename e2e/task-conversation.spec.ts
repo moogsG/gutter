@@ -8,12 +8,13 @@ test("capture → all-task board → conversation → status persists", async ({
   await expect(page.getByText("All active task work, across capture dates.")).toBeVisible();
   await page.getByRole("link", { name: "Capture task in journal" }).click();
 
-  const quickCapture = page.getByPlaceholder("Type / for shortcuts, ⌘K for commands");
-  await expect(quickCapture).toBeVisible();
-  await quickCapture.fill(title);
+  const captureDialog = page.getByRole("dialog", { name: "Capture a task" });
+  await expect(captureDialog).toBeVisible();
+  const captureInput = captureDialog.getByRole("textbox", { name: "Start talking or typing…" });
+  await captureInput.fill(title);
   await Promise.all([
-    page.waitForResponse((response) => response.url().includes("/api/journal") && response.request().method() === "POST" && response.ok()),
-    page.getByRole("button", { name: "Add", exact: true }).click(),
+    page.waitForResponse((response) => response.url().endsWith("/api/journal/transcript/process") && response.request().method() === "POST" && response.ok()),
+    captureInput.press("Enter"),
   ]);
 
   await page.goto("/kanban");
