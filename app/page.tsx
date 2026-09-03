@@ -8,6 +8,7 @@ import { TodayFocus } from "@/components/journal/TodayFocus";
 import { MorningView } from "@/components/journal/MorningView";
 import { CaptureDialog } from "@/components/journal/CaptureDialog";
 import { EmptyTodayPrompt } from "@/components/journal/EmptyTodayPrompt";
+import { TodayHabitCheckIns } from "@/components/journal/TodayHabitCheckIns";
 import {
 	journalApi,
 	useAddEntryMutation,
@@ -19,7 +20,7 @@ import {
 import { useAppDispatch } from "@/store/store";
 import type { Signifier } from "@/types/journal";
 import { toast } from "sonner";
-import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
+import { getJournalDate, isValidJournalDate, shiftJournalDate } from "@/lib/journal-date";
 
 function getMigrateTargetDate(viewDate: string): string {
 	const today = getJournalDate();
@@ -41,15 +42,18 @@ function findEntryById(entries: any[], id: string): any | undefined {
 }
 
 export default function JournalPage() {
-	const [currentDate, setCurrentDate] = useState<string>(
-		getJournalDate(),
-	);
+	const [currentDate, setCurrentDate] = useState<string>(getJournalDate);
 	const { data: entries = [], isLoading } = useGetEntriesQuery(currentDate);
 	const [addEntry] = useAddEntryMutation();
 	const [updateEntry] = useUpdateEntryMutation();
 	const [deleteEntry] = useDeleteEntryMutation();
 	const [migrateEntries] = useMigrateEntriesMutation();
 	const dispatch = useAppDispatch();
+
+	useEffect(() => {
+		const requestedDate = new URLSearchParams(window.location.search).get("date");
+		if (isValidJournalDate(requestedDate)) setCurrentDate(requestedDate);
+	}, []);
 
 	// Prefetch adjacent days for instant navigation
 	useEffect(() => {
@@ -235,6 +239,7 @@ export default function JournalPage() {
 				onOpenChange={setCaptureOpen}
 			/>
 			<EntryInput date={currentDate} onSubmit={handleAddEntry} />
+			<TodayHabitCheckIns date={currentDate} />
 			{entries.length === 0 ? (
 				<EmptyTodayPrompt date={currentDate} onOpenCapture={handleOpenCapture} />
 			) : (

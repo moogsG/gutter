@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { HabitsMomentumData } from "@/types";
+import type { HabitCheckInState, HabitsMomentumData } from "@/types";
 
 export const habitsApi = createApi({
   reducerPath: "habitsApi",
@@ -11,7 +11,24 @@ export const habitsApi = createApi({
       providesTags: (result, error, date) => [{ type: "Habits", id: date }],
       keepUnusedDataFor: 60,
     }),
+    setHabitCheckIn: builder.mutation<
+      { habitId: string; date: string; state: HabitCheckInState },
+      { habitId: string; date: string; state: HabitCheckInState }
+    >({
+      query: (body) => ({ url: "/habits", method: "POST", body }),
+      async onQueryStarted({ habitId, date, state }, { dispatch, queryFulfilled }) {
+        const patch = dispatch(habitsApi.util.updateQueryData("getHabitsMomentum", date, (draft) => {
+          const habit = draft.today.find((item) => item.habitId === habitId);
+          if (habit) habit.state = state;
+        }));
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+    }),
   }),
 });
 
-export const { useGetHabitsMomentumQuery } = habitsApi;
+export const { useGetHabitsMomentumQuery, useSetHabitCheckInMutation } = habitsApi;

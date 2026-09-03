@@ -1,13 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { getDb } from "@/lib/db";
-import { getJournalDate, shiftJournalDate } from "@/lib/journal-date";
+import { getJournalDate, isValidJournalDate, shiftJournalDate } from "@/lib/journal-date";
 import { getOpenClawWorkspacePath } from "@/lib/paths";
 import type {
   HabitsLegacySnapshotItem,
   HabitsMomentumData,
   HabitsMomentumHabit,
   HabitsMomentumStatus,
+  HabitCheckInState,
 } from "@/types";
 
 const WINDOW_DAYS = 14;
@@ -24,6 +25,44 @@ const HABIT_DEFS = [
 ] as const;
 
 type HabitId = (typeof HABIT_DEFS)[number]["id"];
+
+interface HabitCheckInRow {
+  habit_id: HabitId;
+  date: string;
+  state: Exclude<HabitCheckInState, "unlogged">;
+}
+
+export function isHabitId(value: unknown): value is HabitId {
+  return typeof value === "string" && HABIT_DEFS.some((habit) => habit.id === value);
+}
+
+export function isValidHabitDate(value: unknown): value is string {
+  return isValidJournalDate(value);
+}
+
+export function setHabitCheckIn(habitId: HabitId, date: string, state: HabitCheckInState) {
+  const db = getDb();
+  if (state === "unlogged") {
+    db.prepare("DELETE FROM habit_check_ins WHERE habit_id = ? AND date = ?").run(habitId, date);
+  } else {
+    db.prepare(`
+      INSERT INTO habit_check_ins (id, habit_id, date, state)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(habit_id, date) DO UPDATE SET
+        state = excluded.state,
+        updated_at = datetime('now')
+    `).run(crypto.randomUUID(), habitId, date, state);
+  }
+  return { habitId, date, state };
+}
+
+export function resolveHabitHistoryState(
+  state: Exclude<HabitCheckInState, "unlogged"> | undefined,
+  policy: { isPast: boolean; missedWhenUnlogged: boolean },
+): HabitsMomentumStatus {
+  if (state) return state;
+  return policy.isPast && policy.missedWhenUnlogged ? "missed" : "unlogged";
+}
 
 const MEMORY_PATTERNS: Record<HabitId, RegExp> = {
   omad: /✅\s+(OMAD cut|Balanced meals today)/i,
@@ -114,14 +153,14 @@ async function readMemorySignals(dates: string[]): Promise<Map<string, Partial<R
 
 function buildHabitSummary(id: HabitId, statuses: HabitsMomentumStatus[]): HabitsMomentumHabit {
   const def = HABIT_DEFS.find((habit) => habit.id === id)!;
-  const tracked = statuses.filter((status) => status !== "off" && status !== "untracked");
-  const hits = tracked.filter((status) => status === "hit").length;
+  const tracked = statuses.filter((status) => status === "done" || status === "missed");
+  const hits = tracked.filter((status) => status === "done").length;
   let currentStreak = 0;
   let bestStreak = 0;
   let running = 0;
 
   for (const status of tracked) {
-    if (status === "hit") {
+    if (status === "done") {
       running += 1;
       if (running > bestStreak) bestStreak = running;
     } else {
@@ -130,7 +169,7 @@ function buildHabitSummary(id: HabitId, statuses: HabitsMomentumStatus[]): Habit
   }
 
   for (let index = tracked.length - 1; index >= 0; index -= 1) {
-    if (tracked[index] === "hit") {
+    if (tracked[index] === "done") {
       currentStreak += 1;
       continue;
     }
@@ -185,49 +224,25 @@ export async function getHabitsMomentumData(requestedDate = formatCancunIsoDate(
   }
 
   const mealDates = new Set(mealRows.map((row) => row.date));
+  const checkInRows = db.prepare(`
+    SELECT habit_id, date, state
+    FROM habit_check_ins
+    WHERE date >= ? AND date <= ?
+  `).all(startDate, endDate) as HabitCheckInRow[];
+  const checkIns = new Map(checkInRows.map((row) => [`${row.date}:${row.habit_id}`, row.state]));
   const dayStatuses = new Map<string, Record<HabitId, HabitsMomentumStatus>>();
   const habitStatusLists = new Map<HabitId, HabitsMomentumStatus[]>(
     HABIT_DEFS.map((habit) => [habit.id, []]),
   );
 
   for (const date of windowDates) {
-    const rows = rowsByDate.get(date) ?? [];
-    const memory = memorySignals.get(date) ?? {};
-    const isCurrentDay = date === requestedDate;
-    const statuses: Record<HabitId, HabitsMomentumStatus> = {
-      omad: isCurrentDay ? "off" : "untracked",
-      workout: isCurrentDay ? "off" : "untracked",
-      alcohol: isCurrentDay ? "off" : "untracked",
-      prep: isCurrentDay ? "off" : "untracked",
-      mealLog: isCurrentDay ? "off" : "untracked",
-    };
-
-    for (const habit of HABIT_DEFS.filter((entry) => entry.id !== "mealLog")) {
-      const row = rows.find((candidate) => parseTags(candidate.tags).includes(habit.tag));
-      if (row) {
-        statuses[habit.id] = memory[habit.id]
-          ? "hit"
-          : isCurrentDay
-            ? "off"
-            : row.status === "done"
-              ? "hit"
-              : "miss";
-        continue;
-      }
-
-      if (memory[habit.id]) {
-        statuses[habit.id] = "hit";
-      }
-    }
-
-    const trackedToday = rows.length > 0 || mealDates.has(date) || Object.values(memory).some(Boolean);
-    if (trackedToday) {
-      statuses.mealLog = memory.mealLog || mealDates.has(date)
-        ? "hit"
-        : isCurrentDay
-          ? "off"
-          : "miss";
-    }
+    const statuses = Object.fromEntries(HABIT_DEFS.map((habit) => [
+      habit.id,
+      resolveHabitHistoryState(checkIns.get(`${date}:${habit.id}`), {
+        isPast: date < requestedDate,
+        missedWhenUnlogged: false,
+      }),
+    ])) as Record<HabitId, HabitsMomentumStatus>;
 
     dayStatuses.set(date, statuses);
     for (const habit of HABIT_DEFS) {
@@ -238,7 +253,7 @@ export async function getHabitsMomentumData(requestedDate = formatCancunIsoDate(
   const habits = HABIT_DEFS.map((habit) => {
     const statuses = habitStatusLists.get(habit.id)!;
     const summary = buildHabitSummary(habit.id, statuses);
-    const lastHitIndex = statuses.lastIndexOf("hit");
+    const lastHitIndex = statuses.lastIndexOf("done");
     return {
       ...summary,
       lastHitDate: lastHitIndex >= 0 ? shiftDate(startDate, lastHitIndex) : null,
@@ -271,10 +286,10 @@ export async function getHabitsMomentumData(requestedDate = formatCancunIsoDate(
       };
 
   const trackedDays = days.filter((day) =>
-    Object.values(day.statuses).some((status) => status !== "off" && status !== "untracked"),
+    Object.values(day.statuses).some((status) => status === "done" || status === "skipped" || status === "missed"),
   ).length;
   const missingDays = days.filter((day) =>
-    Object.values(day.statuses).every((status) => status === "untracked"),
+    Object.values(day.statuses).every((status) => status === "unlogged"),
   ).length;
   const coveragePercent = Math.round((trackedDays / WINDOW_DAYS) * 100);
   const strongHabits = habits.filter(
@@ -302,6 +317,20 @@ export async function getHabitsMomentumData(requestedDate = formatCancunIsoDate(
       slippingHabits,
     },
     nextMove,
+    today: HABIT_DEFS.map((habit) => ({
+      habitId: habit.id,
+      label: habit.label,
+      description: habit.description,
+      schedule: "daily" as const,
+      state: checkIns.get(`${requestedDate}:${habit.id}`) ?? "unlogged",
+      suggestion: (
+        memorySignals.get(requestedDate)?.[habit.id]
+        || (habit.id === "mealLog" && mealDates.has(requestedDate))
+        || (rowsByDate.get(requestedDate) ?? []).some((row) => parseTags(row.tags).includes(habit.tag))
+      )
+        ? "A related signal was found. Confirm it yourself."
+        : null,
+    })),
     habits,
     days,
     legacySnapshot: toLegacySnapshot(tracker),

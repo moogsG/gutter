@@ -983,7 +983,18 @@ export interface HealthCutData {
   audit: HealthCutBacklogAudit;
 }
 
-export type HabitsMomentumStatus = "hit" | "miss" | "off" | "untracked";
+export type HabitsMomentumStatus = "done" | "skipped" | "missed" | "unlogged";
+
+export type HabitCheckInState = "done" | "skipped" | "unlogged";
+
+export interface HabitDailyCheckIn {
+  habitId: string;
+  label: string;
+  description: string;
+  schedule: "daily";
+  state: HabitCheckInState;
+  suggestion: string | null;
+}
 
 export interface HabitsMomentumDay {
   date: string;
@@ -1029,6 +1040,7 @@ export interface HabitsMomentumData {
     slippingHabits: number;
   };
   nextMove: string;
+  today: HabitDailyCheckIn[];
   habits: HabitsMomentumHabit[];
   days: HabitsMomentumDay[];
   legacySnapshot: HabitsLegacySnapshotItem[];

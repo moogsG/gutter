@@ -1,9 +1,5 @@
 import { HabitsMomentumPageClient } from "@/components/journal/HabitsMomentumPageClient";
-import { getJournalDate } from "@/lib/journal-date";
-
-function isValidIsoDate(value: string | undefined): value is string {
-  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
-}
+import { getJournalDate, isValidJournalDate } from "@/lib/journal-date";
 
 function getCancunTodayDate(): string {
   return getJournalDate();
@@ -20,7 +16,7 @@ export default async function HabitsPage({
 
   return (
     <HabitsMomentumPageClient
-      initialDate={isValidIsoDate(requestedDate) ? requestedDate : getCancunTodayDate()}
+      initialDate={isValidJournalDate(requestedDate) ? requestedDate : getCancunTodayDate()}
     />
   );
 }

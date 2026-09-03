@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { getJournalDate } from "@/lib/journal-date";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const push = vi.fn();
@@ -62,6 +63,9 @@ vi.mock("@/components/journal/EntryInput", () => ({ EntryInput: () => <div /> })
 vi.mock("@/components/journal/EntryItem", () => ({ EntryItem: () => <div /> }));
 vi.mock("@/components/journal/VoiceButton", () => ({ VoiceButton: () => <button type="button">Voice</button> }));
 vi.mock("@/components/journal/TodayFocus", () => ({ TodayFocus: () => <div /> }));
+vi.mock("@/components/journal/TodayHabitCheckIns", () => ({
+	TodayHabitCheckIns: ({ date }: { date: string }) => <section data-testid="today-habit-check-ins" data-date={date} />,
+}));
 vi.mock("@/components/journal/MorningView", () => ({ MorningView: () => <div /> }));
 vi.mock("@/components/journal/EmptyTodayPrompt", () => ({ EmptyTodayPrompt: () => <div /> }));
 vi.mock("@/components/journal/CaptureDialog", () => ({
@@ -152,6 +156,24 @@ describe("core navigation flows", () => {
 		render(<JournalPage />);
 
 		expect(await screen.findByRole("dialog")).toHaveAttribute("data-capture-mode", "task");
+	});
+
+	it("opens Today habit check-ins on a selected history date", async () => {
+		window.history.replaceState({}, "", "/?date=2026-09-01");
+		const { default: JournalPage } = await import("@/app/page");
+
+		render(<JournalPage />);
+
+		expect(screen.getByTestId("today-habit-check-ins")).toHaveAttribute("data-date", "2026-09-01");
+	});
+
+	it("rejects an impossible selected history date", async () => {
+		window.history.replaceState({}, "", "/?date=2026-02-30");
+		const { default: JournalPage } = await import("@/app/page");
+
+		render(<JournalPage />);
+
+		expect(screen.getByTestId("today-habit-check-ins")).toHaveAttribute("data-date", getJournalDate());
 	});
 
 	it("loads a collection page through its id-backed detail path", async () => {
